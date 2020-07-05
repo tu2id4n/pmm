@@ -1,5 +1,18 @@
+# run
+``` python run.py --log_path=log/ --save_path=model/test --save_interval=1e5 --num_timesteps=1e7 ```
+
+# 安装环境依赖包
+可以 conda 初始化一个纯净环境，使用清华源或者豆瓣源安装   
+```pip install -i https://pypi.tuna.tsinghua.edu.cn/simple -r requirements.txt```
+
+
+# 后台运行
+```nohup python -u *.py > logs/filename 2>&1 &```   
+
+
 # pommerman 环境信息
-{'alive': [10, 11],    
+{   
+'alive': [10, 11],     
 'board':    
 array([[ 0,  0,  1,  7,  0,  0,  1,  2],  
        [ 0,  0,  0,  0,  1,  1,  1,  2],  
