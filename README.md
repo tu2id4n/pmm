@@ -1,3 +1,10 @@
+# 待修改
+timespans -> [1,10]
+activ  -> relu
+is_dead -> meas
+rewards info
+在视野内死亡  未修改
+
 # run
 ``` python run.py --log_path=log/ --save_path=model/test --save_interval=1e5 --num_timesteps=1e7 ```
 

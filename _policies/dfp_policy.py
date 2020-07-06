@@ -1,11 +1,10 @@
 import tensorflow as tf
 import numpy as np
-from gym.spaces import Discrete, Box
-from stable_baselines.common.policies import BasePolicy, nature_cnn, register_policy
+from stable_baselines.common.policies import BasePolicy
 from stable_baselines.common.input import observation_input
-from abc import ABC, abstractmethod
 from stable_baselines.a2c.utils import conv, linear, conv_to_fc
 from stable_baselines.common import tf_util
+
 
 def simple_cnn(scaled_images, **kwargs):
     activ = tf.nn.relu
@@ -22,14 +21,15 @@ def simple_cnn(scaled_images, **kwargs):
 def simple_fc(scalars, name='sca', **kwargs):
     activ = tf.nn.relu
     layer_1 = activ(
-        linear(scalars, name+'1', n_hidden=128, init_scale=np.sqrt(2)))
+        linear(scalars, name + '1', n_hidden=128, init_scale=np.sqrt(2)))
     layer_2 = activ(
-        linear(scalars, name+'2', n_hidden=128, init_scale=np.sqrt(2)))
-    return activ(linear(layer_2, name+'3', n_hidden=128, init_scale=np.sqrt(2)))
+        linear(layer_1, name + '2', n_hidden=128, init_scale=np.sqrt(2)))
+    return activ(linear(layer_2, name + '3', n_hidden=128, init_scale=np.sqrt(2)))
 
 
 class DFPPolicy(BasePolicy):
-    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, n_env, n_steps, n_batch, reuse=False, scale=False,
+    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, n_env, n_steps, n_batch, reuse=False,
+                 scale=False,
                  obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, future_size=6):
         super(DFPPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse, scale=scale,
                                         obs_phs=obs_phs)
@@ -82,16 +82,17 @@ class DFPPolicy(BasePolicy):
 
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
-                expectation_stream = tf.nn.tanh(linear(
+                expectation_stream = tf.nn.relu(linear(
                     extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             # action_stream
             action_stream = [None] * self.n_actions
             for i in range(self.n_actions):
                 with tf.variable_scope('action_fc' + str(i), reuse=reuse):
-                    action_stream[i] = tf.nn.tanh(linear(
+                    action_stream[i] = tf.nn.relu(linear(
                         extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
                     action_stream[i] = tf.add(action_stream[i], expectation_stream)
+
             with tf.variable_scope('future', reuse=reuse):
                 self._future_stream = tf.convert_to_tensor(action_stream)
                 self._setup_init()
@@ -128,7 +129,7 @@ class DFPPolicy(BasePolicy):
     @property
     def mea_ph(self):
         return self._mea_ph
-    
+
     @property
     def goal_ph(self):
         return self._goal_ph
@@ -155,6 +156,3 @@ class DFPPolicy(BasePolicy):
 
     def proba_step(self):
         pass
-
-
-

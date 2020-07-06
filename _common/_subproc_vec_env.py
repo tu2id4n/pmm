@@ -24,27 +24,27 @@ def _worker(remote, parent_remote, env_fn_wrapper):
         try:
             cmd, data = remote.recv()
             if cmd == 'step':
-                whole_obs = env.get_observations(train_idx, reset=False)
+                whole_obs = env.get_observations(reset=False)
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
                 all_actions[train_idx] = data  # 当前训练的 agent 的动作也加进来
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
                 rew = whole_rew[train_idx]  # 得到训练智能体的当前步的 reward
-                wins = 0  # 输出胜率
+                win = 0  # 输出胜率
 
                 info['terminal_obs'] = featurize.featurize(whole_obs[train_idx])  # 保存上一帧observation，否则reset后将丢失
 
                 if done:  # 如果结束, 重新开一把
                     if info['result'] == constants.Result.Win:
-                        wins = 1
+                        win = 1
                     whole_obs = env.reset()  # 重新开一把
 
                 obs = featurize.featurize(whole_obs[train_idx])
 
                 # 所以done对应的是下一个episode的开始
-                remote.send((obs, rew, done, info['terminal_obs'], wins))
+                remote.send((obs, rew, done, info['terminal_obs'], win))
 
             elif cmd == 'reset':
-                whole_obs = env.reset()
+                whole_obs = env.reset(train_idx=train_idx, goal=None)
                 obs = featurize.featurize(whole_obs[train_idx])
     
                 remote.send(obs)

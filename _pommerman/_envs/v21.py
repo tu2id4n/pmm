@@ -28,16 +28,16 @@ class Pomme(v0.Pomme):
         self._radio_vocab_size = kwargs.get('radio_vocab_size')
         self._radio_num_words = kwargs.get('radio_num_words')
         if (self._radio_vocab_size and
-                not self._radio_num_words) or (not self._radio_vocab_size and
-                                               self._radio_num_words):
+            not self._radio_num_words) or (not self._radio_vocab_size and
+                                           self._radio_num_words):
             assert ("Include both radio_vocab_size and radio_num_words.")
 
         self._radio_from_agent = {
             agent: (0, 0)
             for agent in [
-                constants.Item.Agent0, constants.Item.Agent1,
-                constants.Item.Agent2, constants.Item.Agent3
-            ]
+            constants.Item.Agent0, constants.Item.Agent1,
+            constants.Item.Agent2, constants.Item.Agent3
+        ]
         }
         super().__init__(*args, **kwargs)
 
@@ -62,7 +62,7 @@ class Pomme(v0.Pomme):
         - enemies (three of {AgentDummy.value, Agent3.value}).
         - radio (radio_vocab_size * radio_num_words)
         """
-        bss = self._board_size**2
+        bss = self._board_size ** 2
         min_obs = [0] * 3 * bss + [0] * 5 + [constants.Item.AgentDummy.value
                                              ] * 4
         max_obs = [len(constants.Item)] * bss + [self._board_size
@@ -74,17 +74,17 @@ class Pomme(v0.Pomme):
         self.observation_space = spaces.Box(
             np.array(min_obs), np.array(max_obs))
 
-    def get_observations(self, train_idx=0, reset=True):
+    def get_observations(self, reset=True):
 
         observations = super().get_observations()  # 已经获得新的self.observations了
         if not reset:
-            observations[train_idx] = self.observation_pre
+            observations[self.train_idx] = self.observation_pre
             return observations
 
         for obs in observations:
             obs['message'] = self._radio_from_agent[obs['teammate']]
 
-        observation = observations[train_idx]
+        observation = observations[self.train_idx]
         observation['goal'] = self.goal
 
         # 如果没有obs_pre 就将obs_pre 设置为只当前相同.
@@ -94,6 +94,7 @@ class Pomme(v0.Pomme):
             observation['frags'] = 0
             observation['items'] = 0
             observation['idx'] = observation['board'][observation['position']]
+            observation['ammo_used'] = 0
             self.observation_pre = observation
 
         # 通过obs_pre 和obs_now 对比，将my_bomb, woods, frags, items --> obs_now.
@@ -113,6 +114,7 @@ class Pomme(v0.Pomme):
         items_pre = self.observation_pre['items']
         woods_pre = self.observation_pre['woods']
         frags_pre = self.observation_pre['frags']
+        ammo_used_pre = self.observation_pre['ammo_used']
 
         position = observation['position']
         strength = observation['blast_strength'] - 1
@@ -120,6 +122,14 @@ class Pomme(v0.Pomme):
 
         # 加入 idx
         observation['idx'] = self.observation_pre['idx']
+
+        # 加入 is_alive
+        observation['is_dead'] = observation['idx'] not in alives
+
+        # 增加 ammo_used
+        ammo_used = self.observation_pre['ammo'] - observation['ammo']
+        ammo_used = ammo_used if ammo_used > 0 else 0
+        observation['ammo_used'] = ammo_used_pre + ammo_used
 
         # 加入 my_bomb
         # 首先将之前的 bomb_life -1
@@ -130,7 +140,7 @@ class Pomme(v0.Pomme):
                 my_bomb.append(my_bomb_pre[bf_idx])
 
         # 再加入最新放置的 bomb
-        if(bomb_life[position] == 9):
+        if (bomb_life[position] == 9):
             my_bomb.append([position[0], position[1], 9, strength])
 
         observation['my_bomb'] = my_bomb
@@ -170,7 +180,7 @@ class Pomme(v0.Pomme):
                 frags += 1
         observation['frags'] = frags
 
-        observations[train_idx] = observation
+        observations[self.train_idx] = observation
         self.observations = observations
         self.observation_pre = observation
         return observations
@@ -210,7 +220,8 @@ class Pomme(v0.Pomme):
 
         done = self._get_done()
         obs = self.get_observations()
-        reward = self._get_rewards()
+        # reward = self._get_rewards()
+        reward = self.get_rewards_v21(done)
         info = self._get_info(done, reward)
 
         if done:
@@ -221,9 +232,9 @@ class Pomme(v0.Pomme):
         self._step_count += 1
         return obs, reward, done, info
 
-    def reset(self):
+    def reset(self, train_idx=0, goal=None, meas_size=5):
         assert (self._agents is not None)
-
+        self.train_idx = train_idx
         if self._init_game_state is not None:
             self.set_json_info()
         else:
@@ -241,24 +252,27 @@ class Pomme(v0.Pomme):
                 agent.reset()
 
         self.observation_pre = None
-        self.goal = self.get_goal()
+        self.goal = self.get_goal(goal, meas_size=meas_size)
         return self.get_observations()
 
-    def get_goal(self, rand=False):
+    def get_goal(self, goal=None, meas_size=None):
         # woods, items, ammos, frags
-        goal = [0.2, 0.2, 0.2, 1]
-        if rand:
-            for i in range(len(goal)):
-                goal[i] = random.random()
+        if goal:
+            return np.array(goal)
+
+        goal = np.zeros(meas_size)
+        for i in range(len(goal)):
+            goal[i] = random.uniform(-1, 1)
 
         return np.array(goal)
 
     def _get_done(self):
         alive = [agent for agent in self._agents if agent.is_alive]
         alive_ids = sorted([agent.agent_id for agent in alive])
+
         if self._step_count >= self._max_steps:
             return True
-        elif self.training_agent is not None and self.training_agent not in alive_ids:
+        elif self.train_idx is not None and self.train_idx not in alive_ids:
             return True
         elif any([
             len(alive_ids) <= 1,
@@ -280,22 +294,42 @@ class Pomme(v0.Pomme):
                 alive_ids == [0, 2],
                 alive_ids == [0],
                 alive_ids == [2]
-                ]):
+            ]):
 
                 return {
                     'result': constants.Result.Win,
-                    'winners': [0,2],
+                    'winners': [0, 2],
                 }
 
             else:
                 return {
                     'result': constants.Result.Loss,
-                    'winners': [1,3],
+                    'winners': [1, 3],
                 }
+
         return {
             'result': constants.Result.Incomplete,
         }
 
+    def get_rewards_v21(self, done):
+
+        alive = [agent for agent in self._agents if agent.is_alive]
+        alive_ids = sorted([agent.agent_id for agent in alive])
+        if done:
+            if self._step_count >= self._max_steps:
+                return [-1, -1, -1, -1]
+            elif any([
+                alive_ids == [0, 2],
+                alive_ids == [0],
+                alive_ids == [2]
+            ]):
+
+                return [1, -1, 1, -1]
+
+            else:
+                return [-1, 1, -1, 1]
+
+        return [0, 0, 0, 0]
 
     @staticmethod
     def featurize(obs):

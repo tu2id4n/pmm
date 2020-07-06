@@ -23,7 +23,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
                  learning_starts=50,
-                 exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
+                 exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=64, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
 
@@ -61,7 +61,7 @@ class DFP(BaseRLModel):
         self.goal_space = featurize.get_goal_space()
         self.action_space = featurize.get_action_space()
         self.n_actions = self.action_space.n
-        self.time_spans = [1, 2, 4, 6, 8, 10, 12]
+        self.time_spans = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
         self.future_len = len(self.time_spans)
         self.meas_size = self.meas_space.shape[0]
         self.future_size = self.future_len * self.meas_size
