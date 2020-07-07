@@ -136,7 +136,7 @@ def measurements_extra(meas):
     maps.append(meas['frags'] / 2)
     maps.append(meas['is_dead'])
 
-    return np.array(maps)  # 4 -> [woods, items, ammos_used, frags, alive]
+    return np.array(maps)  # 4 -> [woods, items, ammo_used, frags, is_dead]
 
 
 # 提取特定位置 position_bomb_map

@@ -128,8 +128,8 @@ class Pomme(v0.Pomme):
 
         # 增加 ammo_used
         ammo_used = self.observation_pre['ammo'] - observation['ammo']
-        ammo_used = ammo_used if ammo_used > 0 else 0
-        observation['ammo_used'] = ammo_used_pre + ammo_used
+        ammo_used_pre = ammo_used_pre + ammo_used if ammo_used > 0 else ammo_used_pre
+        observation['ammo_used'] = ammo_used_pre
 
         # 加入 my_bomb
         # 首先将之前的 bomb_life -1
