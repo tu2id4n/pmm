@@ -15,11 +15,13 @@ agent_list = [
 ]
 env = pommerman.make('PommeRadioCompetition-v21', agent_list)
 
-model = DFP.load(load_path="model/test_600k.zip")
+model = DFP.load(load_path="model/test_1100k.zip")
 train_idx = 0
 for episode in tqdm(range(1000)):
     # [woods, items, ammo_used, frags, is_dead]
-    obs = env.reset(train_idx=train_idx, goal=[0.1, 0.9, 0.5, 0, 0.1])
+    goal = None
+    goal_init = [0.11, 0.93, 0.51, 0.38, 0.01]
+    obs = env.reset(train_idx=train_idx, goal=goal_init)
     done = False
     while not done:
         all_actions = env.act(obs)

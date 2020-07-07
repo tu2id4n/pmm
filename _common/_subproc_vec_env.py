@@ -9,6 +9,7 @@ from stable_baselines.common.tile_images import tile_images
 
 from _common import featurize
 import numpy as np
+import random
 
 
 def _worker(remote, parent_remote, env_fn_wrapper):
@@ -24,15 +25,19 @@ def _worker(remote, parent_remote, env_fn_wrapper):
         try:
             cmd, data = remote.recv()
             if cmd == 'step':
+                train_act, update_eps = data
+
                 whole_obs = env.get_observations(reset=False)
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
-                all_actions[train_idx] = data  # 当前训练的 agent 的动作也加进来
+
+                if random.random() < update_eps:  # 使用simple agent 进行探索
+                    all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
+
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
                 rew = whole_rew[train_idx]  # 得到训练智能体的当前步的 reward
-                win = 0  # 输出胜率
-
                 info['terminal_obs'] = featurize.featurize(whole_obs[train_idx])  # 保存上一帧observation，否则reset后将丢失
 
+                win = 0  # 输出胜率
                 if done:  # 如果结束, 重新开一把
                     if info['result'] == constants.Result.Win:
                         win = 1
