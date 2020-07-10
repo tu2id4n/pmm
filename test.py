@@ -22,16 +22,16 @@ class Test:
 
         self.env = pommerman.make('PommeRadioCompetition-v21', self.agent_list)
 
-        self.model = DFP.load(load_path="model/test3spansfix_6900k.zip")
+        self.model = DFP.load(load_path="model/test3sr_100k.zip")
         self.train_idx = 0
         self.episode = 1000
-        self.goal = [0.5, 0.5, 0.5, 0.5, 0.01]  # [woods, items, ammo_used, frags, is_dead]
+        self.goal = [0.5, 0.5, 0.5, 0, 0.01]  # [woods, items, ammo_used, frags, is_dead]
         self.flag = False
 
     def run(self):
         print("Press D in game window to switch to next game episode")
         for episode in tqdm(range(self.episode)):
-            obs = self.env.reset(train_idx=self.train_idx, goal=None)
+            obs = self.env.reset(train_idx=self.train_idx, goal=self.goal)
             done = False
             first_render = True
             while not done:

@@ -22,7 +22,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=10000, time_spans=[6, 9, 12],  # [5, 10, 15, 20],
+                 learning_starts=10000, time_spans=[6, 9, 12],
                  exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
@@ -160,6 +160,7 @@ class DFP(BaseRLModel):
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
                 action = self.make_action(obs[0][3], futures[0], update_eps=0)
+                print('make_action', action)
                 action = np.array([action])
                 # print('act model futures:', futures.shape)
                 # print("act model action", action.shape)
@@ -200,6 +201,17 @@ class DFP(BaseRLModel):
                         # print("target futures", target_futures.shape)
                         targets = self.get_targets(actions, _futures, target_futures)
                         # print("targets", targets.shape)
+                        # print("actions", actions)
+                        # print("_futures", _futures)
+                        # print("futures", target_futures)
+                        # print('targets', targets)
+                        # np_mse = []
+                        # for i in range(self.action_space.n):
+                        #     mse = target_futures[i] - targets[i]
+                        #     print('mse', 0.5 * np.square(mse))
+                        #     np_mse.append(0.5 * np.square(mse))
+
+                        # print("np.loss", np.mean(np.array(np_mse)))
 
                         td_map = {self.train_model.obs_ph: imgs, self.train_model.sca_ph: scas,
                                   self.train_model.mea_ph: meas, self.train_model.goal_ph: goals,
@@ -207,7 +219,7 @@ class DFP(BaseRLModel):
                                   }
 
                         summary, loss, _ = self.sess.run([self.summay, self.loss, self._train], td_map)
-
+                        # print("loss", loss)
                     writer.add_summary(summary, self.num_timesteps)
                     # print('params[9]')
                     # print(self.sess.run(self.params[9]))

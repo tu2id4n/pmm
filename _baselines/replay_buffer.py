@@ -47,18 +47,18 @@ class ReplayBuffer(object):
     def compute_future(self, idx):
         future = []
         cur_mea = self.storage[idx][2]
-        j = idx + 1
+        j = idx
         terminal = False
         while j - idx <= self.time_spans[-1]:
-            if (j - idx) in self.time_spans:
-                img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = self.storage[j]
-                if done and not terminal:
-                    terminal = True
-                    terminal_mea = t_mea
+            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = self.storage[j]
+            if done:  # 代表结束
+                terminal = True
+                terminal_mea = t_mea
+
+            if (j - idx) in self.time_spans:  # 如果在 timespans 内
                 if terminal:
                     future.extend(terminal_mea - cur_mea)
                 else:
                     future.extend(mea - cur_mea)
             j += 1
-
         return np.array(future)
