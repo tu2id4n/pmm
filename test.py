@@ -29,7 +29,7 @@ class Test:
         self.flag = False
 
     def run(self):
-        print("Print d to next game episode")
+        print("Press D in game window to switch to next game episode")
         for episode in tqdm(range(self.episode)):
             obs = self.env.reset(train_idx=self.train_idx, goal=None)
             done = False

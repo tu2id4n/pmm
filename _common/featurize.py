@@ -73,7 +73,7 @@ def board_abstract(board):
     # 将 items 处理为相同编号
     for r in range(len(board)):
         for c in range(len(board[0])):
-            if (board[(r, c)] in [extra_bomb, incr_range, kick]):
+            if board[(r, c)] in [extra_bomb, incr_range, kick]:
                 board[(r, c)] = extra_bomb
 
     return board
