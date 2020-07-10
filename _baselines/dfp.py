@@ -22,8 +22,8 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=50, time_spans=[5, 10, 15, 20],
-                 exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=64, n_steps=128, nminibatches=4,
+                 learning_starts=10000, time_spans=[6, 9, 12],  # [5, 10, 15, 20],
+                 exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
 
@@ -182,11 +182,13 @@ class DFP(BaseRLModel):
                                                               writer, self.num_timesteps,
                                                               name='win_rate')
 
-
                 can_sample = self.replay_buffer.can_sample()
+
                 if can_sample and self.num_timesteps > self.learning_starts:
                     # print("Sampling ...")
                     imgs, scas, meas, goals, actions, _futures = self.replay_buffer.sample()
+                    # print("sample futures")
+                    # print(_futures)
                     # print('imgs', imgs.shape)
                     # print('scas', scas.shape)
                     # print('actions', actions.shape)
@@ -206,8 +208,9 @@ class DFP(BaseRLModel):
 
                         summary, loss, _ = self.sess.run([self.summay, self.loss, self._train], td_map)
 
-
                     writer.add_summary(summary, self.num_timesteps)
+                    # print('params[9]')
+                    # print(self.sess.run(self.params[9]))
 
                 if self.num_timesteps >= save_interval_st:
                     save_interval_st += save_interval
@@ -283,6 +286,7 @@ class DFP(BaseRLModel):
     def make_action(self, goal, futures, update_eps=0):
         if random.random() < update_eps:
             return random.randint(0, self.n_actions - 1)
+        # print('self.future_len', self.future_len)
         actions = []
         goals = np.tile(goal, self.future_len)
         # print('goals', goals.shape)
