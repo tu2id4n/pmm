@@ -15,23 +15,26 @@ class Test:
             # agents.DockerAgent('multiagentlearning/hakozakijunctions', port=1021),
             # agents.SimpleAgent(),
             _agents.SuicideAgent(),
-            agents.SimpleAgent(),
-            agents.SimpleAgent(),
+            _agents.SuicideAgent(),
+            _agents.SuicideAgent(),
+            # agents.SimpleAgent(),
+            # agents.SimpleAgent(),
             agents.SimpleAgent(),
         ]
 
         self.env = pommerman.make('PommeRadioCompetition-v21', self.agent_list)
 
-        self.model = DFP.load(load_path="model/test3sr_100k.zip")
+        self.model = DFP.load(load_path="model/5fix_random_single_1m.zip")
         self.train_idx = 0
         self.episode = 1000
-        self.goal = [0.5, 0.5, 0.5, 0, 0.01]  # [woods, items, ammo_used, frags, is_dead]
+        self.goal = [1, 1, 0.2, 0.2, -0.5]  # [woods, items, ammo_used, frags, is_dead]
         self.flag = False
 
     def run(self):
         print("Press D in game window to switch to next game episode")
-        for episode in tqdm(range(self.episode)):
+        for episode in range(self.episode):
             obs = self.env.reset(train_idx=self.train_idx, goal=self.goal)
+            print('curr goal', self.env.goal)
             done = False
             first_render = True
             while not done:
@@ -45,7 +48,7 @@ class Test:
                 # print('scas', featurize_obs[1])
                 # print('meas', featurize_obs[2])
                 # print('goal', featurize_obs[3])
-                # print("train", all_actions[train_idx])
+                print("train", all_actions[self.train_idx])
 
                 obs, rewards, done, info = self.env.step(all_actions)
                 self.env.render()
@@ -56,8 +59,8 @@ class Test:
                 if self.flag:
                     self.flag = False
                     done = True
-
-            print(info, rewards)
+            print(info)
+            print()
 
         print('1000 test ok')
         self.env.close()

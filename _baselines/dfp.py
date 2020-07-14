@@ -22,7 +22,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=10000, time_spans=[6, 9, 12],
+                 learning_starts=10000, time_spans=[1, 3, 6, 9, 12],
                  exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
@@ -107,7 +107,8 @@ class DFP(BaseRLModel):
 
                     grads = tf.gradients(self.loss, self.params)
                     grads = list(zip(grads, self.params))
-                    optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                    # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                    optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
                     self._train = optimizer.apply_gradients(grads)
 
                 tf.global_variables_initializer().run(session=self.sess)
@@ -160,7 +161,7 @@ class DFP(BaseRLModel):
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
                 action = self.make_action(obs[0][3], futures[0], update_eps=0)
-                print('make_action', action)
+                # print('make_action', action)
                 action = np.array([action])
                 # print('act model futures:', futures.shape)
                 # print("act model action", action.shape)
@@ -226,7 +227,7 @@ class DFP(BaseRLModel):
 
                 if self.num_timesteps >= save_interval_st:
                     save_interval_st += save_interval
-                    s_path = save_path + '_' + str(int(self.num_timesteps / 1000)) + 'k.zip'
+                    s_path = save_path + '_' + str(int(self.num_timesteps / save_interval)) + 'M.zip'
                     self.save(save_path=s_path)
 
                 self.num_timesteps += 1
@@ -240,7 +241,9 @@ class DFP(BaseRLModel):
         return action
 
     def save(self, save_path, cloudpickle=False):
+        print()
         print("Saving...")
+        print(save_path)
         data = {
             "gamma": self.gamma,
             "n_steps": self.n_steps,
@@ -274,6 +277,7 @@ class DFP(BaseRLModel):
     @classmethod
     def load(cls, load_path, env=None, tensorboard_log=None, custom_objects=None, **kwargs):
         print("Loading...")
+        print(load_path)
         data, params = cls._load_from_file(load_path, custom_objects=custom_objects)
         if 'policy_kwargs' in kwargs and kwargs['policy_kwargs'] != data['policy_kwargs']:
             raise ValueError("The specified policy kwargs do not equal the stored policy kwargs. "

@@ -261,9 +261,9 @@ class Pomme(v0.Pomme):
             return np.array(goal)
 
         goal = np.zeros(meas_size)
-        for i in range(len(goal)):
-            goal[i] = random.uniform(-1, 1)
-
+        for i in range(len(goal) - 1):
+            goal[i] = random.uniform(0, 1)
+        goal[-1] = random.uniform(-1, 1)
         return np.array(goal)
 
     def _get_done(self):

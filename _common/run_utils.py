@@ -1,6 +1,6 @@
 import pommerman
 from pommerman import agents
-
+from _pommerman import _agents
 
 
 def make_envs(env_id):
@@ -9,8 +9,10 @@ def make_envs(env_id):
     def _thunk():
         agent_list = [
             agents.SimpleAgent(),
-            agents.SimpleAgent(),
-            agents.SimpleAgent(),
+            # agents.SimpleAgent(),
+            _agents.StopAgent(),
+            _agents.SuicideAgent(),
+            # _agents.StopAgent(),
             agents.SimpleAgent(),
             # hit18Agent('1'),
             # hit18Agent('3')

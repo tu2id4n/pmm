@@ -7,19 +7,19 @@ from stable_baselines.common import tf_util
 
 
 def simple_cnn(scaled_images, **kwargs):
-    activ = tf.nn.relu
+    activ = tf.nn.leaky_relu
     layer_1 = activ(conv(scaled_images, 'c1', n_filters=32, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_2 = activ(conv(layer_1, 'c2', n_filters=64, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = activ(conv(layer_2, 'c3', n_filters=64, filter_size=3,
-                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2)))
+    # layer_3 = activ(conv(layer_2, 'c3', n_filters=64, filter_size=3,
+    #                      stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    layer_3 = conv_to_fc(layer_2)
+    return activ(linear(layer_3, 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
 
 
 def simple_fc(scalars, name='sca', **kwargs):
-    activ = tf.nn.relu
+    activ = tf.nn.leaky_relu
     layer_1 = activ(
         linear(scalars, name + '1', n_hidden=128, init_scale=np.sqrt(2)))
     layer_2 = activ(
@@ -82,15 +82,15 @@ class DFPPolicy(BasePolicy):
 
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
-                expectation_stream = tf.nn.relu(linear(
-                    extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                expectation_stream = linear(
+                    extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2))
 
             # action_stream
             action_stream = [None] * self.n_actions
             for i in range(self.n_actions):
                 with tf.variable_scope('action_fc' + str(i), reuse=reuse):
-                    action_stream[i] = tf.nn.relu(linear(
-                        extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                    action_stream[i] = linear(
+                        extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
                     action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):

@@ -2,6 +2,9 @@
 在视野内死亡
 优化探索
 优化timespans
+meas增加探索坐标
+
+stop simple mix
 
 # run
 ``` python run.py --log_path=log/ --save_path=model/test --save_interval=1e5 --num_timesteps=1e7 ```

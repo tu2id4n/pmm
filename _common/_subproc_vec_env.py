@@ -29,8 +29,10 @@ def _worker(remote, parent_remote, env_fn_wrapper):
 
                 whole_obs = env.get_observations(reset=False)
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
-                if random.random() > update_eps:  # 使用simple agent 进行探索
+                if random.random() < 1 - update_eps:  # 使用 simple agent 进行探索
                     all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
+                else:  # 使用 random 进行探索
+                    all_actions[train_idx] = np.array([random.randint(0, 5)])
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
                 rew = whole_rew[train_idx]  # 得到训练智能体的当前步的 reward
@@ -48,7 +50,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 remote.send((obs, rew, done, info['terminal_obs'], win))
 
             elif cmd == 'reset':
-                whole_obs = env.reset(train_idx=train_idx, goal=None)
+                whole_obs = env.reset(train_idx=train_idx, goal=[1, 1, 0.2, 0.2, -0.5])
                 obs = featurize.featurize(whole_obs[train_idx])
 
                 remote.send(obs)

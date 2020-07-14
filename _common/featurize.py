@@ -107,7 +107,7 @@ def img_extra(img):
 def scalars_extra(scas):
     maps = []
 
-    ammo = scas['ammo'] / 5 if scas['ammo'] / 5 <= 1 else 1
+    ammo = scas['ammo'] / 4 if scas['ammo'] / 4 <= 1 else 1
     blast_strength = scas['blast_strength'] / 6 if scas['blast_strength'] / 6 <= 1 else 1
 
     maps.append(scas['step_count'] / 801)
@@ -131,9 +131,9 @@ def scalars_extra(scas):
 # 衡量指标提取
 def measurements_extra(meas):
     maps = []
-    woods = meas['woods'] / 10 if meas['woods'] / 10 <= 1 else 1
-    items = meas['items'] / 6 if meas['items'] / 6 <= 1 else 1
-    ammo_used = meas['ammo_used'] / 50 if meas['ammo_used'] / 50 <= 1 else 1
+    woods = meas['woods'] / 15 if meas['woods'] / 15 <= 1 else 1
+    items = meas['items'] / 10 if meas['items'] / 10 <= 1 else 1
+    ammo_used = meas['ammo_used'] / 20 if meas['ammo_used'] / 20 <= 1 else 1
 
     maps.append(woods)
     maps.append(items)
