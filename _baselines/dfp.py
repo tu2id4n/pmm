@@ -99,6 +99,7 @@ class DFP(BaseRLModel):
                     self.targets_ph = tf.placeholder(tf.float32, [self.n_actions, None, self.future_size],
                                                      name="targets")
                     mse_error = train_model.mse_loss(self.targets_ph)
+                    self.mse = mse_error
                     self.loss = tf.reduce_mean(mse_error)
                     tf.summary.scalar('loss', self.loss)
 
@@ -161,10 +162,7 @@ class DFP(BaseRLModel):
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
                 action = self.make_action(obs[0][3], futures[0], update_eps=0)
-                # print('make_action', action)
                 action = np.array([action])
-                # print('act model futures:', futures.shape)
-                # print("act model action", action.shape)
 
                 new_obs, rew, done, terminal_obs, win = self.env.step([(action, update_eps)])
                 self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0])
@@ -189,23 +187,10 @@ class DFP(BaseRLModel):
                 if can_sample and self.num_timesteps > self.learning_starts:
                     # print("Sampling ...")
                     imgs, scas, meas, goals, actions, _futures = self.replay_buffer.sample()
-                    # print("sample futures")
-                    # print(_futures)
-                    # print('imgs', imgs.shape)
-                    # print('scas', scas.shape)
-                    # print('actions', actions.shape)
-                    # print('_futures', _futures.shape)
-
                     if writer is not None:
                         # print("Training ...")
                         target_futures = self.act_model.get_futures(imgs, scas, meas, goals)
-                        # print("target futures", target_futures.shape)
                         targets = self.get_targets(actions, _futures, target_futures)
-                        # print("targets", targets.shape)
-                        # print("actions", actions)
-                        # print("_futures", _futures)
-                        # print("futures", target_futures)
-                        # print('targets', targets)
                         # np_mse = []
                         # for i in range(self.action_space.n):
                         #     mse = target_futures[i] - targets[i]
@@ -219,10 +204,8 @@ class DFP(BaseRLModel):
                                   self.targets_ph: targets
                                   }
 
-                        summary, loss, _ = self.sess.run([self.summay, self.loss, self._train], td_map)
-                        # print("loss", loss)
+                        summary, loss, _, mse = self.sess.run([self.summay, self.loss, self._train, self.mse], td_map)
                     writer.add_summary(summary, self.num_timesteps)
-                    # print('params[9]')
                     # print(self.sess.run(self.params[9]))
 
                 if self.num_timesteps >= save_interval_st:
@@ -231,6 +214,31 @@ class DFP(BaseRLModel):
                     self.save(save_path=s_path)
 
                 self.num_timesteps += 1
+
+    def convert_futures(self, futures):
+        return futures.swapaxes(0, 1)
+
+    def make_action(self, goal, futures, update_eps=0):
+        if random.random() < update_eps:
+            return random.randint(0, self.n_actions - 1)
+        # print('self.future_len', self.future_len)
+        actions = []
+        goals = np.tile(goal, self.future_len)
+        # print('goals', goals.shape)
+        for f in futures:
+            actions.append(goals.dot(f))
+        # print(actions)
+        return np.argmax(np.array(actions))
+
+    def get_targets(self, actions, futures, _target_futures):
+        target_futures = copy.deepcopy(_target_futures)
+        for i in range(self.batch_size):
+            target_futures[actions[i]][i] = futures[i]
+
+        # 将小于0的置为0
+        target_futures = np.where(target_futures > 0, target_futures, 0)
+
+        return target_futures
 
     def predict(self, obs):
         obs = np.array(obs).reshape(1, -1)
@@ -295,26 +303,6 @@ class DFP(BaseRLModel):
         model.load_parameters(params)
 
         return model
-
-    def convert_futures(self, futures):
-        return futures.swapaxes(0, 1)
-
-    def make_action(self, goal, futures, update_eps=0):
-        if random.random() < update_eps:
-            return random.randint(0, self.n_actions - 1)
-        # print('self.future_len', self.future_len)
-        actions = []
-        goals = np.tile(goal, self.future_len)
-        # print('goals', goals.shape)
-        for f in futures:
-            actions.append(goals.dot(f))
-
-        return np.argmax(np.array(actions))
-
-    def get_targets(self, actions, futures, target_futures):
-        for i in range(self.batch_size):
-            target_futures[actions[i]][i] = futures[i]
-        return target_futures
 
     def _get_pretrain_placeholders(self):
         pass

@@ -107,10 +107,12 @@ def img_extra(img):
 def scalars_extra(scas):
     maps = []
 
+    step = scas['step_count'] / 800 if scas['step_count'] / 800 <= 1 else 1
     ammo = scas['ammo'] / 4 if scas['ammo'] / 4 <= 1 else 1
     blast_strength = scas['blast_strength'] / 6 if scas['blast_strength'] / 6 <= 1 else 1
 
-    maps.append(scas['step_count'] / 801)
+
+    maps.append(step)
     maps.append(ammo)
     maps.append(blast_strength)
     maps.append(scas['can_kick'])

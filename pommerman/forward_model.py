@@ -480,9 +480,9 @@ class ForwardModel(object):
         for agent in alive_agents:
             if curr_board[agent.position] == constants.Item.Flames.value:
                 agent.die()
+                # print(agent.is_alive)
             else:
                 curr_board[agent.position] = utility.agent_value(agent.agent_id)
-
         return curr_board, curr_agents, curr_bombs, curr_items, curr_flames
 
     def get_observations(self, curr_board, agents, bombs, flames,

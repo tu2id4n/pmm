@@ -217,7 +217,6 @@ class Pomme(v0.Pomme):
             max_blast_strength=max_blast_strength)
         self._board, self._agents, self._bombs, self._items, self._flames = \
             result[:5]
-
         done = self._get_done()
         obs = self.get_observations()
         # reward = self._get_rewards()

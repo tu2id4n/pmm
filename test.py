@@ -13,18 +13,14 @@ class Test:
     def __init__(self):
         self.agent_list = [
             # agents.DockerAgent('multiagentlearning/hakozakijunctions', port=1021),
-            # agents.SimpleAgent(),
             _agents.SuicideAgent(),
-            _agents.SuicideAgent(),
-            _agents.SuicideAgent(),
-            # agents.SimpleAgent(),
-            # agents.SimpleAgent(),
+            agents.SimpleAgent(),
+            agents.SimpleAgent(),
             agents.SimpleAgent(),
         ]
 
         self.env = pommerman.make('PommeRadioCompetition-v21', self.agent_list)
-
-        self.model = DFP.load(load_path="model/5fix_random_single_1m.zip")
+        self.model = DFP.load(load_path="model/pretrain_v1_4M.zip")
         self.train_idx = 0
         self.episode = 1000
         self.goal = [1, 1, 0.2, 0.2, -0.5]  # [woods, items, ammo_used, frags, is_dead]
@@ -48,7 +44,7 @@ class Test:
                 # print('scas', featurize_obs[1])
                 # print('meas', featurize_obs[2])
                 # print('goal', featurize_obs[3])
-                print("train", all_actions[self.train_idx])
+                # print("train", all_actions[self.train_idx])
 
                 obs, rewards, done, info = self.env.step(all_actions)
                 self.env.render()
@@ -59,6 +55,10 @@ class Test:
                 if self.flag:
                     self.flag = False
                     done = True
+                # if done:
+                #     print('dead')
+                #     self.env._agents[self.train_idx + 2].is_alive = True
+
             print(info)
             print()
 
