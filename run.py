@@ -23,7 +23,7 @@ def _train():
     if args.load_path is None:
         model = DFP(policy=DFPPolicy, env=env, tensorboard_log=args.log_path,
                     exploration_final_eps=0.2, exploration_fraction=0.05,
-                    batch_size=128, time_spans=[8, 9, 10], learning_starts=10000)
+                    batch_size=128, time_spans=[1], learning_starts=10000)
     else:
         model = DFP.load(load_path=args.load_path, tensorboard_log=args.log_path, env=env)
     model.learn(total_timesteps=total_timesteps, save_path=args.save_path, save_interval=args.save_interval)

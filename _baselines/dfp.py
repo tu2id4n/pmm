@@ -236,7 +236,7 @@ class DFP(BaseRLModel):
             target_futures[actions[i]][i] = futures[i]
 
         # 将小于0的置为0
-        target_futures = np.where(target_futures > 0, target_futures, 0)
+        # target_futures = np.where(target_futures > 0, target_futures, 0)
 
         return target_futures
 

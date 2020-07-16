@@ -8,23 +8,23 @@ from stable_baselines.common import tf_util
 
 def simple_cnn(scaled_images, **kwargs):
     activ = tf.nn.leaky_relu
-    layer_1 = activ(conv(scaled_images, 'c1', n_filters=32, filter_size=8,
+    layer_1 = activ(conv(scaled_images, 'c1', n_filters=256, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_2 = activ(conv(layer_1, 'c2', n_filters=64, filter_size=4,
+    layer_2 = activ(conv(layer_1, 'c2', n_filters=256, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    # layer_3 = activ(conv(layer_2, 'c3', n_filters=64, filter_size=3,
-    #                      stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = conv_to_fc(layer_2)
-    return activ(linear(layer_3, 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
+    layer_3 = activ(conv(layer_2, 'c3', n_filters=256, filter_size=3,
+                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    layer_3 = conv_to_fc(layer_3)
+    return activ(linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2)))
 
 
-def simple_fc(scalars, name='sca', **kwargs):
+def simple_fc(scalars, name='sca', n_dim=256):
     activ = tf.nn.leaky_relu
     layer_1 = activ(
-        linear(scalars, name + '1', n_hidden=128, init_scale=np.sqrt(2)))
+        linear(scalars, name + '1', n_hidden=n_dim, init_scale=np.sqrt(2)))
     layer_2 = activ(
-        linear(layer_1, name + '2', n_hidden=128, init_scale=np.sqrt(2)))
-    return activ(linear(layer_2, name + '3', n_hidden=128, init_scale=np.sqrt(2)))
+        linear(layer_1, name + '2', n_hidden=n_dim, init_scale=np.sqrt(2)))
+    return activ(linear(layer_2, name + '3', n_hidden=n_dim, init_scale=np.sqrt(2)))
 
 
 class DFPPolicy(BasePolicy):
@@ -64,7 +64,7 @@ class DFPPolicy(BasePolicy):
                 extracted_img = tf.layers.flatten(extracted_img)
             with tf.variable_scope('sca_fc', reuse=reuse):
                 # 标量特征
-                extracted_sca = simple_fc(self.processed_sca)
+                extracted_sca = simple_fc(self.processed_sca, n_dim=128)
                 extracted_sca = tf.layers.flatten(extracted_sca)
             with tf.variable_scope('mea_fc', reuse=reuse):
                 # 衡量值特征
@@ -72,7 +72,7 @@ class DFPPolicy(BasePolicy):
                 extracted_mea = tf.layers.flatten(extracted_mea)
             with tf.variable_scope('goal_fc', reuse=reuse):
                 # goal特征
-                extracted_goal = simple_fc(self.processed_goal, name='goal')
+                extracted_goal = simple_fc(self.processed_goal, name='goal', n_dim=128)
                 extracted_goal = tf.layers.flatten(extracted_goal)
 
             with tf.variable_scope('concat', reuse=reuse):
@@ -82,8 +82,8 @@ class DFPPolicy(BasePolicy):
 
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
-                expectation_stream = linear(
-                    extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2))
+                expectation_stream = tf.nn.leaky_relu(linear(
+                    extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             # action_stream
             action_stream = [None] * self.n_actions
@@ -91,7 +91,16 @@ class DFPPolicy(BasePolicy):
                 with tf.variable_scope('action_fc' + str(i), reuse=reuse):
                     action_stream[i] = linear(
                         extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
-                    action_stream[i] = tf.add(action_stream[i], expectation_stream)
+
+            action_sum = action_stream[0]
+            for i in range(1, self.n_actions):
+                action_sum = tf.add(action_sum, action_stream[i])
+
+            action_mean = tf.divide(action_sum, self.n_actions)
+
+            for i in range(self.n_actions):
+                action_stream[i] = tf.subtract(action_stream[i], action_mean)
+                action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):
                 self._future_stream = tf.convert_to_tensor(action_stream)
