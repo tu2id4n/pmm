@@ -9,7 +9,7 @@ class ReplayBuffer(object):
         self.time_spans = time_spans
         self.future_size = len(time_spans)
         self.batch_size = batch_size
-    
+
     def can_sample(self):
         """
         Check if n_samples samples can be sampled
@@ -19,7 +19,6 @@ class ReplayBuffer(object):
         :return: (bool)
         """
         return len(self.storage) >= 2 * self.batch_size
-    
 
     def add(self, obs, actions, rews, dones, terminal_obs, wins):
         imgs, scas, meas, goals = obs
@@ -30,8 +29,12 @@ class ReplayBuffer(object):
             self.storage.pop(0)
 
     def sample(self):
+        return self.seq_sample()
+
+    def rand_sample(self):
         idxes = [random.randint(0, len(self.storage) - 1 - self.time_spans[-1]) for _ in range(self.batch_size)]
         imgs, scas, meas, goals, actions, futures = [], [], [], [], [], []
+
         for i in idxes:
             data = self.storage[i]
             img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
@@ -40,9 +43,39 @@ class ReplayBuffer(object):
             meas.append(mea)
             goals.append(goal)
             actions.append(action)
-            futures.append(self.compute_future(idx=i))
-        
-        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(actions), np.array(futures)
+            future, _ = self.compute_future(idx=i)
+            futures.append(future)
+
+        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), \
+               np.array(actions), np.array(futures)
+
+    def seq_sample(self):
+        _len = len(self.storage) - 1 - self.time_spans[-1]
+        imgs, scas, meas, goals, actions, futures = [], [], [], [], [], []
+        terminal = True
+        for i in range(self.batch_size):
+            if terminal:
+                idx = random.randint(0, _len)
+
+            data = self.storage[idx]
+            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
+            imgs.append(img)
+            scas.append(sca)
+            meas.append(mea)
+            goals.append(goal)
+            actions.append(action)
+            future, terminal = self.compute_future(idx=idx)
+            futures.append(future)
+
+            # 获得连续的经验.
+            idx += 1
+
+            # 如果idx超出界限, 则需要重选idx.
+            if idx > _len:
+                terminal = True
+
+        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), \
+               np.array(actions), np.array(futures)
 
     def compute_future(self, idx):
         future = []
@@ -61,4 +94,6 @@ class ReplayBuffer(object):
                 else:
                     future.extend(mea - cur_mea)
             j += 1
-        return np.array(future)
+        return np.array(future), terminal
+
+
