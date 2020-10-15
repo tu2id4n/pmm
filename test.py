@@ -20,7 +20,7 @@ class Test:
         ]
 
         self.env = pommerman.make('PommeRadioCompetition-v21', self.agent_list)
-        self.model = DFP.load(load_path="model/pre_v1_35M.zip")
+        self.model = DFP.load(load_path="model/prev_12M.zip")
         self.train_idx = 0
         self.episode = 1000
         self.goal = [1, 1, 0.2, 0.2, -0.5]  # [woods, items, ammo_used, frags, is_dead]

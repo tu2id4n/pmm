@@ -3,32 +3,29 @@ from pommerman import agents
 from _pommerman import _agents
 
 agent_list = [
-    _agents.StopAgent(),
+    # _agents.StopAgent(),
     agents.SimpleAgent(),
     _agents.SuicideAgent(),
-    agents.SimpleAgent(),
+    _agents.SuicideAgent(),
+    _agents.SuicideAgent(),
 ]
 
-env = pommerman.make('PommeRadioCompetition-v21', agent_list)
+env = pommerman.make('maze-v1', agent_list)
 
 for episode in range(10000):
     obs = env.reset()
     done = False
     first_render = True
     count = 0
-    while True:
+    while not done:
         all_actions = env.act(obs)
         obs, rewards, done, info = env.step(all_actions)
+        print(rewards[0])
         env.render()
-        print(obs[2]['step_count'])
-        if not env._agents[2].is_alive:
-            print(obs[2]['step_count'])
 
         # if done and not count:
         #     count += 1
         #     env._agents[2]._character.is_alive = True;  # reborn
     print(info)
-    print()
-
 print('1000 test ok')
 env.close()

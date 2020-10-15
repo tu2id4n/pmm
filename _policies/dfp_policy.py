@@ -6,16 +6,16 @@ from stable_baselines.a2c.utils import conv, linear, conv_to_fc
 from stable_baselines.common import tf_util
 
 
-def simple_cnn(scaled_images, **kwargs):
+def simple_cnn(scaled_images, name='img', **kwargs):
     activ = tf.nn.leaky_relu
-    layer_1 = activ(conv(scaled_images, 'c1', n_filters=256, filter_size=8,
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=256, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_2 = activ(conv(layer_1, 'c2', n_filters=256, filter_size=4,
+    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=256, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = activ(conv(layer_2, 'c3', n_filters=256, filter_size=3,
+    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=256, filter_size=3,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, 'fc1', n_hidden=512, init_scale=np.sqrt(2)))
+    return activ(linear(layer_3, name + 'fc1', n_hidden=512, init_scale=np.sqrt(2)))
 
 
 def simple_fc(scalars, name='sca', n_dim=256):
@@ -28,12 +28,18 @@ def simple_fc(scalars, name='sca', n_dim=256):
 
 
 class DFPPolicy(BasePolicy):
-    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, n_env, n_steps, n_batch, reuse=False,
-                 scale=False,
-                 obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, future_size=6):
+    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, gm_space, n_env, n_steps, n_batch, 
+                 reuse=False, scale=False,
+                 obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, gm_phs=None, future_size=6):
         super(DFPPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse, scale=scale,
                                         obs_phs=obs_phs)
         with tf.variable_scope("input_fc", reuse=False):
+            if gm_phs is None:
+                self._gm_ph, self._processed_gm = observation_input(
+                    gm_space, n_batch, scale=scale)
+            else:
+                self._gm_ph, self._processed_gm = gm_phs
+
             if sca_phs is None:
                 self._sca_ph, self._processed_sca = observation_input(
                     sc_space, n_batch, scale=scale)
@@ -58,10 +64,14 @@ class DFPPolicy(BasePolicy):
         self.future_size = future_size
 
         with tf.variable_scope('model', reuse=reuse):
-            with tf.variable_scope('cnn', reuse=reuse):
+            with tf.variable_scope('img_cnn', reuse=reuse):
                 # CNN提取棋盘特征
                 extracted_img = simple_cnn(self.processed_obs)
                 extracted_img = tf.layers.flatten(extracted_img)
+            with tf.variable_scope('gm_cnn', reuse=reuse):
+                # CNN提取goalmap特征
+                extracted_gm = simple_cnn(self.processed_gm, name='gm')
+                extracted_gm = tf.layers.flatten(extracted_gm)
             with tf.variable_scope('sca_fc', reuse=reuse):
                 # 标量特征
                 extracted_sca = simple_fc(self.processed_sca, n_dim=128)
@@ -78,7 +88,7 @@ class DFPPolicy(BasePolicy):
             with tf.variable_scope('concat', reuse=reuse):
                 # 将所有特征拼接
                 extracted_input = tf.concat(
-                    [extracted_img, extracted_sca, extracted_mea, extracted_goal], axis=1, name='concat')
+                    [extracted_img, extracted_sca, extracted_mea, extracted_goal, extracted_gm], axis=1, name='concat')
 
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
@@ -114,15 +124,16 @@ class DFPPolicy(BasePolicy):
             self._futures = self.future_stream  # [n_act, n_batch, n_time_span]
 
     def step(self, obs):
-        imgs, scas, meas, goals = zip(*obs)
-
+        imgs, scas, meas, goals, gms = zip(*obs)
         futures = self.sess.run(self.futures,
-                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas, self.goal_ph: goals})
+                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas, self.goal_ph: goals,
+                                 self.gm_ph: gms})
         return futures
 
-    def get_futures(self, imgs, scas, meas, goals):
+    def get_futures(self, imgs, scas, meas, goals, gms):
         futures = self.sess.run(self.futures,
-                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas, self.goal_ph: goals})
+                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas, self.goal_ph: goals,
+                                 self.gm_ph: gms})
         return futures
 
     def mse_loss(self, targets):
@@ -130,6 +141,10 @@ class DFPPolicy(BasePolicy):
         mse_error = tf_util.huber_loss(error)
 
         return mse_error
+
+    @property
+    def gm_ph(self):
+        return self._gm_ph
 
     @property
     def sca_ph(self):
@@ -142,6 +157,10 @@ class DFPPolicy(BasePolicy):
     @property
     def goal_ph(self):
         return self._goal_ph
+
+    @property
+    def processed_gm(self):
+        return self._processed_gm
 
     @property
     def processed_sca(self):

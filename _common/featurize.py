@@ -18,16 +18,20 @@ def get_img_space():
     return spaces.Box(low=0, high=1, shape=(11, 11, 10))
 
 
+def get_goalmap_space():
+    return spaces.Box(low=0, high=1, shape=(11, 11, 3))
+
+
 def get_scas_space():
-    return spaces.Box(low=0, high=1, shape=(7,))
+    return spaces.Box(low=0, high=1, shape=(7,))  # 7 -> [steps, ammo, strength, kick, teammate, enemy1, enemy2]
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(5,))
+    return spaces.Box(low=0, high=1, shape=(7,))  # 7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, steps]
 
 
 def get_goal_space():
-    return spaces.Box(low=-1, high=1, shape=(5,))
+    return spaces.Box(low=-1, high=1, shape=(7,))
 
 
 def get_action_space():
@@ -60,12 +64,18 @@ def featurize(obs):
     meas['woods'] = obs['woods']
     meas['frags'] = obs['frags']
     meas['is_dead'] = obs['is_dead']
+    meas['position'] = obs['position']
+    meas['goal_position'] = obs['goal_position']
+    meas['step_count'] = obs['step_count']
     meas_fea = measurements_extra(meas)
 
     # 提取目标
     goal_fea = np.array(obs['goal'])
 
-    return img_fea, scas_fea, meas_fea, goal_fea  # [ (11, 11, 10), (7, ), (5, ), (5, ) ]
+    # 提取goalmap
+    goalmap_fea = goalmap_extra(img)
+
+    return img_fea, scas_fea, meas_fea, goal_fea, goalmap_fea  # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
 
 
 # 状态抽象
@@ -103,14 +113,25 @@ def img_extra(img):
     return np.stack(maps, axis=2)  # 11 * 11 * 10
 
 
+# goalmap提取
+def goalmap_extra(img):
+    board = img['board']
+    maps = []
+    for i in [passage, rigid]:  # fog?
+        maps.append(board == i)
+    maps.append(np.logical_or(
+        board == img['idx'], board == img['goal_position']))
+
+    return np.stack(maps, axis=2)  # 11 * 11 * 3
+
+
 # 标量提取
 def scalars_extra(scas):
     maps = []
 
-    step = scas['step_count'] / 800 if scas['step_count'] / 800 <= 1 else 1
-    ammo = scas['ammo'] / 4 if scas['ammo'] / 4 <= 1 else 1
-    blast_strength = scas['blast_strength'] / 6 if scas['blast_strength'] / 6 <= 1 else 1
-
+    step = scas['step_count']  # / 800 if scas['step_count'] / 800 <= 1 else 1
+    ammo = scas['ammo']  # / 4 if scas['ammo'] / 4 <= 1 else 1
+    blast_strength = scas['blast_strength']  # / 6 if scas['blast_strength'] / 6 <= 1 else 1
 
     maps.append(step)
     maps.append(ammo)
@@ -127,23 +148,24 @@ def scalars_extra(scas):
         a = 1 if aliv in scas['alives'] else 0
         maps.append(a)
 
-    return np.array(maps)  # 7 -> [step, ammo, strength, kick, teammate, enemy1, enemy2]
+    return np.array(maps)  # 7 -> [steps, ammo, strength, kick, teammate, enemy1, enemy2]
 
 
 # 衡量指标提取
 def measurements_extra(meas):
     maps = []
-    woods = meas['woods'] / 15 if meas['woods'] / 15 <= 1 else 1
-    items = meas['items'] / 10 if meas['items'] / 10 <= 1 else 1
-    ammo_used = meas['ammo_used'] / 20 if meas['ammo_used'] / 20 <= 1 else 1
+    woods = meas['woods']  # / 15 if meas['woods'] / 15 <= 1 else 1
+    items = meas['items']  # / 10 if meas['items'] / 10 <= 1 else 1
+    ammo_used = meas['ammo_used']  # / 20 if meas['ammo_used'] / 20 <= 1 else 1
 
     maps.append(woods)
     maps.append(items)
     maps.append(ammo_used)
-    maps.append(meas['frags'] / 2)
+    maps.append(meas['frags'])
     maps.append(meas['is_dead'])
-
-    return np.array(maps)  # 4 -> [woods, items, ammo_used, frags, is_dead]
+    maps.append(meas['position'] == meas['goal_position'])
+    maps.append(meas['step_count'])
+    return np.array(maps)  # 7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, steps]
 
 
 # 提取特定位置 position_bomb_map

@@ -60,6 +60,7 @@ class DFP(BaseRLModel):
         self.meas_space = featurize.get_meas_space()
         self.goal_space = featurize.get_goal_space()
         self.action_space = featurize.get_action_space()
+        self.goalmap_space = featurize.get_goalmap_space()
         self.n_actions = self.action_space.n
         self.time_spans = time_spans
         self.future_len = len(self.time_spans)
@@ -83,14 +84,14 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space,
+                                        self.action_space, self.goalmap_space,
                                         self.n_envs, 1, n_batch_step, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
                 with tf.variable_scope('train_model', reuse=True,
                                        custom_getter=tf_util.outer_scope_getter("train_model")):
                     train_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space,
-                                              self.goal_space, self.action_space,
+                                              self.goal_space, self.action_space, self.goalmap_space,
                                               self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
                                               reuse=False, future_size=self.future_size,
                                               **self.policy_kwargs)
@@ -144,7 +145,7 @@ class DFP(BaseRLModel):
                                               initial_p=1,
                                               final_p=self.exploration_final_eps)
 
-            obs = self.env.reset()  # (imgs, scas, meas, goal)  ==> # [ n_cpu * (11, 11, 10), (6, ), (4, ), (4, ) ]
+            obs = self.env.reset()  # (imgs, scas, meas, goal, gms)  ==> # [(11, 11, 10), (6, ), (4, ), (4, ), (11, 11, 3)]
             reset = True  #
             self.episode_reward = np.zeros((1,))
             self.wins = np.zeros((1,))
@@ -161,13 +162,12 @@ class DFP(BaseRLModel):
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
-                action = self.make_action(obs[0][3], futures[0], update_eps=0)
+                action = self.make_action(obs[0][3], futures[0], update_eps=update_eps)
                 action = np.array([action])
 
-                new_obs, rew, done, terminal_obs, win = self.env.step([(action, update_eps)])
+                new_obs, rew, done, terminal_obs, win = self.env.step([(action, 0)])
                 self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0])
                 obs = new_obs
-
                 if writer is not None:
                     summary_eps = tf.Summary(value=[tf.Summary.Value(tag='update_eps', simple_value=update_eps)])
                     writer.add_summary(summary_eps, self.num_timesteps)
@@ -186,10 +186,10 @@ class DFP(BaseRLModel):
 
                 if can_sample and self.num_timesteps > self.learning_starts:
                     # print("Sampling ...")
-                    imgs, scas, meas, goals, actions, _futures = self.replay_buffer.sample()
+                    imgs, scas, meas, goals, gms, actions, _futures = self.replay_buffer.sample()
                     if writer is not None:
                         # print("Training ...")
-                        target_futures = self.act_model.get_futures(imgs, scas, meas, goals)
+                        target_futures = self.act_model.get_futures(imgs, scas, meas, goals, gms)
                         targets = self.get_targets(actions, _futures, target_futures)
                         # np_mse = []
                         # for i in range(self.action_space.n):
@@ -201,7 +201,7 @@ class DFP(BaseRLModel):
 
                         td_map = {self.train_model.obs_ph: imgs, self.train_model.sca_ph: scas,
                                   self.train_model.mea_ph: meas, self.train_model.goal_ph: goals,
-                                  self.targets_ph: targets
+                                  self.targets_ph: targets, self.train_model.gm_ph: gms,
                                   }
 
                         summary, loss, _, mse = self.sess.run([self.summay, self.loss, self._train, self.mse], td_map)
@@ -220,7 +220,7 @@ class DFP(BaseRLModel):
 
     def make_action(self, goal, futures, update_eps=0):
         if random.random() < update_eps:
-            return random.randint(0, self.n_actions - 1)
+            return random.randint(1, self.n_actions - 2)  # WASD
         # print('self.future_len', self.future_len)
         actions = []
         goals = np.tile(goal, self.future_len)
@@ -269,6 +269,7 @@ class DFP(BaseRLModel):
             "meas_space": self.meas_space,
             "goal_space": self.goal_space,
             "action_space": self.action_space,
+            "goalmap_space": self.goalmap_space,
             "n_actions": self.n_actions,
             "time_spans": self.time_spans,
             "future_len": self.future_len,

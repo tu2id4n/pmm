@@ -268,7 +268,6 @@ def radio_v2_env():
     agent = characters.Bomber
     return locals()
 
-
 def radio_competition_env():
     """Start up a team radio config with the default settings."""
     env = envs.v2.Pomme
@@ -292,7 +291,7 @@ def radio_competition_env():
     agent = characters.Bomber
     return locals()
 
-
+# v21: dfp环境
 def radio_competition_v21_env():
     """Start up a team radio config with the default settings."""
     env = envs.v2.Pomme
@@ -309,6 +308,29 @@ def radio_competition_v21_env():
         'render_fps': constants.RENDER_FPS,
         'agent_view_size': constants.AGENT_VIEW_SIZE,
         'is_partially_observable': True,
+        'env': env_entry_point,
+        'radio_vocab_size': constants.RADIO_VOCAB_SIZE,
+        'radio_num_words': constants.RADIO_NUM_WORDS,
+    }
+    agent = characters.Bomber
+    return locals()
+    
+def maze_v1_env():
+    """Start up a team radio config with the default settings."""
+    env = envs.v2.Pomme
+    game_type = constants.GameType.TeamRadio
+    env_entry_point = '_pommerman._envs.maze_v1:Pomme'
+    env_id = 'maze-v1'
+    env_kwargs = {
+        'game_type': game_type,
+        'board_size': constants.BOARD_SIZE,
+        'num_rigid': constants.NUM_RIGID,
+        'num_wood': constants.NUM_WOOD,
+        'num_items': constants.NUM_ITEMS,
+        'max_steps': constants.MAX_STEPS,
+        'render_fps': constants.RENDER_FPS,
+        'agent_view_size': constants.AGENT_VIEW_SIZE,
+        'is_partially_observable': False,
         'env': env_entry_point,
         'radio_vocab_size': constants.RADIO_VOCAB_SIZE,
         'radio_num_words': constants.RADIO_NUM_WORDS,

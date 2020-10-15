@@ -21,9 +21,9 @@ class ReplayBuffer(object):
         return len(self.storage) >= 2 * self.batch_size
 
     def add(self, obs, actions, rews, dones, terminal_obs, wins):
-        imgs, scas, meas, goals = obs
-        t_imgs, t_scas, t_meas, t_goals = terminal_obs
-        data = (imgs, scas, meas, goals, actions, rews, dones, wins, t_imgs, t_scas, t_meas, t_goals)
+        imgs, scas, meas, goals, gms = obs
+        t_imgs, t_scas, t_meas, t_goals, t_gms = terminal_obs
+        data = (imgs, scas, meas, goals, gms, actions, rews, dones, wins, t_imgs, t_scas, t_meas, t_goals, t_gms)
         self.storage.append(data)
         while len(self.storage) > self.maxsize:
             self.storage.pop(0)
@@ -33,36 +33,38 @@ class ReplayBuffer(object):
 
     def rand_sample(self):
         idxes = [random.randint(0, len(self.storage) - 1 - self.time_spans[-1]) for _ in range(self.batch_size)]
-        imgs, scas, meas, goals, actions, futures = [], [], [], [], [], []
+        imgs, scas, meas, goals, gms, actions, futures = [], [], [], [], [], [], []
 
         for i in idxes:
             data = self.storage[i]
-            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
+            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
             goals.append(goal)
+            gms.append(gm)
             actions.append(action)
             future, _ = self.compute_future(idx=i)
             futures.append(future)
 
-        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), \
+        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
                np.array(actions), np.array(futures)
 
     def seq_sample(self):
         _len = len(self.storage) - 1 - self.time_spans[-1]
-        imgs, scas, meas, goals, actions, futures = [], [], [], [], [], []
+        imgs, scas, meas, goals, gms, actions, futures = [], [], [], [], [], [], []
         terminal = True
         for i in range(self.batch_size):
             if terminal:
                 idx = random.randint(0, _len)
 
             data = self.storage[idx]
-            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
+            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
             goals.append(goal)
+            gms.append(gm)
             actions.append(action)
             future, terminal = self.compute_future(idx=idx)
             futures.append(future)
@@ -74,7 +76,7 @@ class ReplayBuffer(object):
             if idx > _len:
                 terminal = True
 
-        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), \
+        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
                np.array(actions), np.array(futures)
 
     def compute_future(self, idx):
@@ -95,5 +97,3 @@ class ReplayBuffer(object):
                     future.extend(mea - cur_mea)
             j += 1
         return np.array(future), terminal
-
-

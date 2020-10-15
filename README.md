@@ -3,9 +3,23 @@
 优化探索
 优化timespans
 meas增加探索坐标
-
 stop simple mix
 
+# ENV
+v21: DFP环境.  
+  goal: 目标mea
+
+  woods: 智能体炸掉多少 wood.  
+  items: 智能体吃掉多少 item.  
+  idx: 智能体编号. 10 ~ 13  
+  my_bomb: 智能体炸弹位置. [[pos_x, pos_y, bomb_life, bomb_strength]]  
+  ammo: 弹药量.  
+  ammo_used: 目前使用了多少弹药.  
+  frags: 敌人伤亡.  
+  is_dead: 智能体是否阵亡.  
+maze_v1:  
+  reset->make_board
+       ->make_items
 # run
 ``` python run.py --log_path=log/ --save_path=model/test --save_interval=1e5 --num_timesteps=1e7 ```
 

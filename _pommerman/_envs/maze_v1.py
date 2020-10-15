@@ -1,4 +1,4 @@
-""" The Pommerman v21 Environment. DFP """
+""" maze v1 """
 from gym import spaces
 import numpy as np
 
@@ -7,7 +7,7 @@ from pommerman import utility
 from pommerman.envs import v0
 import copy
 import random
-
+from . import env_utils
 
 class Pomme(v0.Pomme):
     '''The hardest pommerman environment. This class expands env v0 
@@ -18,7 +18,6 @@ class Pomme(v0.Pomme):
     }
 
     def __init__(self, *args, **kwargs):
-        self.observation_pre = None
         self._radio_vocab_size = kwargs.get('radio_vocab_size')
         self._radio_num_words = kwargs.get('radio_num_words')
         if (self._radio_vocab_size and
@@ -34,6 +33,7 @@ class Pomme(v0.Pomme):
         ]
         }
         super().__init__(*args, **kwargs)
+        self._max_steps = 200
 
     def _set_action_space(self):
         self.action_space = spaces.Tuple(
@@ -79,7 +79,6 @@ class Pomme(v0.Pomme):
             obs['message'] = self._radio_from_agent[obs['teammate']]
 
         observation = observations[self.train_idx]
-        observation['goal'] = self.goal
 
         # 如果没有obs_pre 就将obs_pre 设置为只当前相同.
         if not self.observation_pre:
@@ -89,8 +88,18 @@ class Pomme(v0.Pomme):
             observation['items'] = 0
             observation['idx'] = observation['board'][observation['position']]
             observation['ammo_used'] = 0
+
+            observation['goal'] = self.goal
+            goal_board = observation['board']
+            for x in range(len(goal_board)):
+                for y in range(len(goal_board)):
+                    if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value, constants.Item.Kick.value]:
+                        observation['goal_position'] = (x, y)
+
             self.observation_pre = observation
 
+        observation['goal'] = self.observation_pre['goal']
+        observation['goal_position'] = self.observation_pre['goal_position']
         # 通过obs_pre 和obs_now 对比，将my_bomb, woods, frags, items --> obs_now.
         extra_bomb = constants.Item.ExtraBomb.value
         incr_range = constants.Item.IncrRange.value
@@ -177,6 +186,8 @@ class Pomme(v0.Pomme):
         observations[self.train_idx] = observation
         self.observations = observations
         self.observation_pre = observation
+        if observation['goal_position'] == observation['position']:
+            self.is_done = True
         return observations
 
     def step(self, actions):
@@ -209,12 +220,13 @@ class Pomme(v0.Pomme):
             self._items,
             self._flames,
             max_blast_strength=max_blast_strength)
+            
         self._board, self._agents, self._bombs, self._items, self._flames = \
             result[:5]
         done = self._get_done()
         obs = self.get_observations()
         # reward = self._get_rewards()
-        reward = self.get_rewards_v21(done)
+        reward = self.get_rewards_maze_v1(done)
         info = self._get_info(done, reward)
 
         if done:
@@ -225,7 +237,7 @@ class Pomme(v0.Pomme):
         self._step_count += 1
         return obs, reward, done, info
 
-    def reset(self, train_idx=0, goal=None, meas_size=5):
+    def reset(self, train_idx=0, goal=None, meas_size=7):
         assert (self._agents is not None)
         self.train_idx = train_idx
         if self._init_game_state is not None:
@@ -245,8 +257,16 @@ class Pomme(v0.Pomme):
                 agent.reset()
 
         self.observation_pre = None
+        self.is_done = False
         self.goal = self.get_goal(goal, meas_size=meas_size)
         return self.get_observations()
+
+    def make_board(self):
+        self._board = env_utils.make_board(self._board_size, self._num_rigid,
+                                         self._num_wood, len(self._agents))
+
+    def make_items(self):
+        self._items = env_utils.make_items(self._board, self._num_items)
 
     def get_goal(self, goal=None, meas_size=None):
         # woods, items, ammos, frags
@@ -254,24 +274,21 @@ class Pomme(v0.Pomme):
             return np.array(goal)
 
         goal = np.zeros(meas_size)
-        for i in range(len(goal) - 1):
-            goal[i] = random.uniform(0, 1)
-        goal[-1] = random.uniform(-1, 1)
+
+        #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
+        goal[0] = random.uniform(0, 1)
+        goal[1] = random.uniform(0, 1)
+        goal[2] = random.uniform(-1, 1)
+        goal[3] = random.uniform(0, 1)
+        goal[4] = random.uniform(-1, 0)
+        goal[5] = random.uniform(0, 1)
+        goal[6] = random.uniform(-1, 0)
         return np.array(goal)
 
     def _get_done(self):
-        alive = [agent for agent in self._agents if agent.is_alive]
-        alive_ids = sorted([agent.agent_id for agent in alive])
-
         if self._step_count >= self._max_steps:
             return True
-        elif self.train_idx is not None and self.train_idx not in alive_ids:
-            return True
-        elif any([
-            len(alive_ids) <= 1,
-            alive_ids == [0, 2],
-            alive_ids == [1, 3],
-        ]):
+        elif self.is_done:
             return True
         return False
 
@@ -304,25 +321,10 @@ class Pomme(v0.Pomme):
             'result': constants.Result.Incomplete,
         }
 
-    def get_rewards_v21(self, done):
-
-        alive = [agent for agent in self._agents if agent.is_alive]
-        alive_ids = sorted([agent.agent_id for agent in alive])
-        if done:
-            if self._step_count >= self._max_steps:
-                return [-1, -1, -1, -1]
-            elif any([
-                alive_ids == [0, 2],
-                alive_ids == [0],
-                alive_ids == [2]
-            ]):
-
-                return [1, -1, 1, -1]
-
-            else:
-                return [-1, 1, -1, 1]
-
-        return [0, 0, 0, 0]
+    def get_rewards_maze_v1(self, done):
+        if self.is_done:
+            return[0, 0, 0, 0]
+        return [-1, -1, -1, -1]
 
     @staticmethod
     def featurize(obs):
