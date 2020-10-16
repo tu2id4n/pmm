@@ -22,7 +22,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=1000, time_spans=[1, 3, 6, 9, 12],
+                 learning_starts=1000, time_spans=[1, 3, 6, 9, 12], hindsight=True,
                  exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
@@ -49,6 +49,7 @@ class DFP(BaseRLModel):
         self.loss = None
 
         self.replay_buffer = None
+        self.hindsight = hindsight
         self.exploration = None
         self.summay = None
         self.episode_reward = None
@@ -166,7 +167,7 @@ class DFP(BaseRLModel):
                 action = np.array([action])
 
                 new_obs, rew, done, terminal_obs, win = self.env.step([(action, 0)])
-                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0])
+                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0], hindsight=self.hindsight)
                 obs = new_obs
                 if writer is not None:
                     summary_eps = tf.Summary(value=[tf.Summary.Value(tag='update_eps', simple_value=update_eps)])
@@ -275,6 +276,7 @@ class DFP(BaseRLModel):
             "meas_size": self.meas_size,
             "future_size": self.future_size,
             "n_envs": self.n_envs,
+            "hindsight:": self.hindsight,
             "policy_kwargs": self.policy_kwargs,
         }
 

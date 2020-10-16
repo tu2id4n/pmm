@@ -33,7 +33,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 if random.random() < update_eps:  # 使用 simple agent 进行探索
                     all_actions[train_idx] = np.array([random.randint(0, 5)])
                 else:  # 使用 random 进行探索
-                    if train_act == 0:  # 使用随机智能体
+                    if train_act == 0:  # 动作0代表使用随机智能体
                         train_act = np.array([random.randint(1, 4)])  # WASD
                     all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
 

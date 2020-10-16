@@ -18,8 +18,16 @@ v21: DFP环境.
   frags: 敌人伤亡.  
   is_dead: 智能体是否阵亡.  
 maze_v1:  
-  reset->make_board
-       ->make_items
+  reset->make_board  
+       ->make_items  
+
+# features
+goal_map: 11 * 11 * 3  
+imgs: 11 * 11 * 10  
+goals: [woods, items, ammo_used, frags, is_dead, reach_goal, steps]  
+meas: [woods, items, ammo_used, frags, is_dead, reach_goal, steps]  
+scas: [steps, ammo, strength, kick, teammate, enemy1, enemy2]  
+
 # run
 ``` python run.py --log_path=log/ --save_path=model/test --save_interval=1e5 --num_timesteps=1e7 ```
 

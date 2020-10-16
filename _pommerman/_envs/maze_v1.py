@@ -188,7 +188,7 @@ class Pomme(v0.Pomme):
         self.observations = observations
         self.observation_pre = observation
         if observation['goal_position'] == observation['position']:
-            self.is_done = True
+            self.achive = True
         return observations
 
     def step(self, actions):
@@ -239,7 +239,7 @@ class Pomme(v0.Pomme):
                 agent.reset()
 
         self.observation_pre = None
-        self.is_done = False
+        self.achive = False
         self.goal = self.get_goal(goal, meas_size=meas_size)
         return self.get_observations()
 
@@ -270,14 +270,14 @@ class Pomme(v0.Pomme):
     def _get_done(self, is_dead):
         if self._step_count >= self._max_steps:
             return True
-        elif self.is_done:
+        elif self.achive:
             return True
         elif is_dead:
             return True
         return False
 
     def get_rewards_maze_v1(self, done, is_dead):
-        if self.is_done:
+        if self.achive:
             return[0, 0, 0, 0]
         elif is_dead:
             return [-200, -1, -1, -1]
@@ -285,6 +285,10 @@ class Pomme(v0.Pomme):
 
     def _get_info(self, done, rewards, is_dead):
         if done:
+            if self.achive:
+                return {
+                    'result': constants.Result.Win,
+                }
             if self._step_count >= self._max_steps:
                 return {
                     'result': constants.Result.Tie,
@@ -293,12 +297,6 @@ class Pomme(v0.Pomme):
                 return {
                     'result': constants.Result.Loss,
                 }
-
-            else:
-                return {
-                    'result': constants.Result.Win,
-                }
-
         return {
             'result': constants.Result.Incomplete,
         }
