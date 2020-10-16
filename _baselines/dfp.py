@@ -22,7 +22,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=10000, time_spans=[1, 3, 6, 9, 12],
+                 learning_starts=1000, time_spans=[1, 3, 6, 9, 12],
                  exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
@@ -220,14 +220,13 @@ class DFP(BaseRLModel):
 
     def make_action(self, goal, futures, update_eps=0):
         if random.random() < update_eps:
-            return random.randint(1, self.n_actions - 2)  # WASD
-        # print('self.future_len', self.future_len)
+            return random.randint(1, 4)  # WASD
+
         actions = []
         goals = np.tile(goal, self.future_len)
-        # print('goals', goals.shape)
         for f in futures:
             actions.append(goals.dot(f))
-        # print(actions)
+        
         return np.argmax(np.array(actions))
 
     def get_targets(self, actions, futures, _target_futures):

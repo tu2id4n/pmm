@@ -20,14 +20,30 @@ class ReplayBuffer(object):
         """
         return len(self.storage) >= 2 * self.batch_size
 
-    def add(self, obs, actions, rews, dones, terminal_obs, wins):
+    def add(self, obs, actions, rews, dones, terminal_obs, wins, hindsight=False):
         imgs, scas, meas, goals, gms = obs
         t_imgs, t_scas, t_meas, t_goals, t_gms = terminal_obs
         data = (imgs, scas, meas, goals, gms, actions, rews, dones, wins, t_imgs, t_scas, t_meas, t_goals, t_gms)
         self.storage.append(data)
         while len(self.storage) > self.maxsize:
             self.storage.pop(0)
+        
+        if hindsight and len(self.storage) > 0:
+            new_imgs = np.stack(imgs, axis=2)
+            new_imgs = np.stack(new_imgs, axis=2)
 
+            new_timgs = np.stack(t_imgs, axis=2)
+            new_timgs = np.stack(new_timgs, axis=2)
+
+            new_gms = np.stack(gms, axis=2)
+            new_gms = np.stack(new_gms, axis=2)
+
+            new_gms[2] = np.logical_or(new_imgs[5], new_timgs[5])
+            new_gms = np.stack(gms, axis=2)
+            data = (imgs, scas, meas, goals, new_gms, actions, rews, dones, wins, t_imgs, t_scas, t_meas, t_goals, new_gms)
+        self.storage.append(data)
+        while len(self.storage) > self.maxsize:
+            self.storage.pop(0)
     def sample(self):
         return self.seq_sample()
 
@@ -59,7 +75,7 @@ class ReplayBuffer(object):
                 idx = random.randint(0, _len)
 
             data = self.storage[idx]
-            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
+            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
@@ -85,7 +101,7 @@ class ReplayBuffer(object):
         j = idx
         terminal = False
         while j - idx <= self.time_spans[-1]:
-            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = self.storage[j]
+            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = self.storage[j]
             if done:  # 代表结束
                 terminal = True
                 terminal_mea = t_mea

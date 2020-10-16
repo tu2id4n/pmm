@@ -12,18 +12,18 @@ Flag = False
 class Test:
     def __init__(self):
         self.agent_list = [
-            # agents.DockerAgent('multiagentlearning/hakozakijunctions', port=1021),
             _agents.SuicideAgent(),
-            agents.SimpleAgent(),
-            agents.SimpleAgent(),
-            agents.SimpleAgent(),
+            _agents.SuicideAgent(),
+            _agents.SuicideAgent(),
+            _agents.SuicideAgent(),
         ]
 
-        self.env = pommerman.make('PommeRadioCompetition-v21', self.agent_list)
-        self.model = DFP.load(load_path="model/prev_12M.zip")
+        self.env = pommerman.make('maze-v1', self.agent_list)
+        self.model = DFP.load(load_path="model/goal_condition_maze_v1_10M.zip")
         self.train_idx = 0
         self.episode = 1000
-        self.goal = [1, 1, 0.2, 0.2, -0.5]  # [woods, items, ammo_used, frags, is_dead]
+        #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
+        self.goal = [0, 0, 0, 0, 0, 1, -1]
         self.flag = False
 
     def run(self):
@@ -40,7 +40,7 @@ class Test:
                 featurize_obs = featurize.featurize(obs[self.train_idx])
                 train_act = self.model.predict(featurize_obs)
                 all_actions[self.train_idx] = train_act
-
+                print("train_act:", train_act)
                 # print('scas', featurize_obs[1])
                 # print('meas', featurize_obs[2])
                 # print('goal', featurize_obs[3])

@@ -37,7 +37,6 @@ def get_goal_space():
 def get_action_space():
     return spaces.Discrete(6)
 
-
 # 分离img \ meas \ scalars 并处理为网络的输入
 def featurize(obs):
     # 直接使用原来obs作为 img

@@ -9,8 +9,9 @@ import copy
 import random
 from . import env_utils
 
+
 class Pomme(v0.Pomme):
-    '''The hardest pommerman environment. This class expands env v0 
+    '''The hardest pommerman environment. This class expands env v0
     adding communication between agents.'''
     metadata = {
         'render.modes': ['human', 'rgb_array', 'rgb_pixel'],
@@ -191,24 +192,6 @@ class Pomme(v0.Pomme):
         return observations
 
     def step(self, actions):
-        # personal_actions = []
-        # radio_actions = []
-        # for agent_actions, agent in zip(actions, self._agents):
-        #     if type(agent_actions) == int or not agent.is_alive:
-        #         personal_actions.append(agent_actions)
-        #         radio_actions.append((0, 0))
-        #     elif type(agent_actions) in [tuple, list]:
-        #         personal_actions.append(agent_actions[0])
-        #         radio_actions.append(
-        #             tuple(agent_actions[1:(1+self._radio_num_words)]))
-        #     else:
-        #         raise
-
-        #     self._radio_from_agent[getattr(
-        #         constants.Item, 'Agent%d' % agent.agent_id)] = radio_actions[-1]
-
-        # return super().step(personal_actions)
-
         self._intended_actions = actions
 
         max_blast_strength = self._agent_view_size or 10
@@ -220,14 +203,13 @@ class Pomme(v0.Pomme):
             self._items,
             self._flames,
             max_blast_strength=max_blast_strength)
-            
+
         self._board, self._agents, self._bombs, self._items, self._flames = \
             result[:5]
-        done = self._get_done()
         obs = self.get_observations()
-        # reward = self._get_rewards()
-        reward = self.get_rewards_maze_v1(done)
-        info = self._get_info(done, reward)
+        done = self._get_done(obs[self.train_idx]['is_dead'])
+        reward = self.get_rewards_maze_v1(done, obs[self.train_idx]['is_dead'])
+        info = self._get_info(done, reward, obs[self.train_idx]['is_dead'])
 
         if done:
             # Callback to let the agents know that the game has ended.
@@ -285,46 +267,41 @@ class Pomme(v0.Pomme):
         goal[6] = random.uniform(-1, 0)
         return np.array(goal)
 
-    def _get_done(self):
+    def _get_done(self, is_dead):
         if self._step_count >= self._max_steps:
             return True
         elif self.is_done:
             return True
+        elif is_dead:
+            return True
         return False
 
-    def _get_info(self, done, rewards):
-        alive = [agent for agent in self._agents if agent.is_alive]
-        alive_ids = sorted([agent.agent_id for agent in alive])
+    def get_rewards_maze_v1(self, done, is_dead):
+        if self.is_done:
+            return[0, 0, 0, 0]
+        elif is_dead:
+            return [-200, -1, -1, -1]
+        return [-1, -1, -1, -1]
+
+    def _get_info(self, done, rewards, is_dead):
         if done:
             if self._step_count >= self._max_steps:
                 return {
                     'result': constants.Result.Tie,
                 }
-            elif any([
-                alive_ids == [0, 2],
-                alive_ids == [0],
-                alive_ids == [2]
-            ]):
-
+            elif is_dead:
                 return {
-                    'result': constants.Result.Win,
-                    'winners': [0, 2],
+                    'result': constants.Result.Loss,
                 }
 
             else:
                 return {
-                    'result': constants.Result.Loss,
-                    'winners': [1, 3],
+                    'result': constants.Result.Win,
                 }
 
         return {
             'result': constants.Result.Incomplete,
         }
-
-    def get_rewards_maze_v1(self, done):
-        if self.is_done:
-            return[0, 0, 0, 0]
-        return [-1, -1, -1, -1]
 
     @staticmethod
     def featurize(obs):
