@@ -2,9 +2,10 @@ import pommerman
 from pommerman import agents
 from _pommerman import _agents
 from tqdm import tqdm
+from _common import featurize
 
 agent_list = [
-    agents.SimpleAgent(),
+    _agents.SuicideAgent(),
     _agents.SuicideAgent(),
     _agents.SuicideAgent(),
     _agents.SuicideAgent(),
@@ -19,9 +20,10 @@ for episode in tqdm(range(10000)):
     count = 0
     while not done:
         all_actions = env.act(obs)
+        all_actions[0] = featurize.choose_act(obs[0], all_actions[0])
         obs, rewards, done, info = env.step(all_actions)
         env.render()
-        print(obs[0])
+
     print(rewards, info)
 print('1000 test ok')
 env.close()

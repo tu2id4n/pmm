@@ -12,7 +12,8 @@ import numpy as np
 import random
 
 #  设置训练的数据
-train_goal = [0, 0, -1, 0, -1, 1, -0.05]
+#  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
+train_goal = [0, 1, 0, 0, -1, 0, -0.01]
 train_idx = 0
 teammates = [train_idx, (train_idx + 2) % 4]
 teammates.sort()
@@ -36,9 +37,10 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 if random.random() < update_eps:  # 使用 simple agent 进行探索
                     all_actions[train_idx] = np.array([random.randint(0, 5)])
                 else:  # 使用 random 进行探索
-                    if train_act == 0:  # 动作0代表使用随机智能体
+                    if train_act == 0 or train_act == 5:  # 动作0/5代表使用随机智能体
                         train_act = np.array([random.randint(1, 4)])  # WASD
                     all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
+                all_actions[train_idx] = featurize.choose_act(whole_obs[train_idx], all_actions[train_idx])
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
                 rew = whole_rew[train_idx]  # 得到训练智能体的当前步的 reward
@@ -56,7 +58,6 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 remote.send((obs, rew, done, info['terminal_obs'], win))
 
             elif cmd == 'reset':
-                #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
                 whole_obs = env.reset(train_idx=train_idx, goal=train_goal)
                 obs = featurize.featurize(whole_obs[train_idx])
 

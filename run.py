@@ -21,9 +21,7 @@ def dfp_train():
 
     env = _subproc_vec_env.SubprocVecEnv(envs)
     if args.load_path is None:
-        model = DFP(policy=DFPPolicy, env=env, tensorboard_log=args.log_path,
-                    exploration_final_eps=0.2, exploration_fraction=0.05,
-                    batch_size=64, learning_starts=10000, hindsight=args.hindsight)
+        model = DFP(policy=DFPPolicy, env=env, tensorboard_log=args.log_path, hindsight=args.hindsight)
     else:
         model = DFP.load(load_path=args.load_path, tensorboard_log=args.log_path,
                          env=env, pgn=args.pgn)

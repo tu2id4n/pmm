@@ -19,12 +19,19 @@ from _common import featurize, model_utils
 from .replay_buffer import ReplayBuffer
 from stable_baselines.common.policies import ActorCriticPolicy
 
+_time_span = [1, 3, 6, 12, 18]
+_exploration_final_eps = 0.2
+_exploration_fraction = 0.05
+_learning_starts = 10000
+_batch_size = 64
+
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=1000, time_spans=[1, 5, 10, 20, 30], hindsight=False, 
-                 exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
-                 verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
+                 learning_starts=_learning_starts, time_spans=_time_span, hindsight=False,
+                 exploration_fraction=_exploration_fraction, exploration_final_eps=_exploration_final_eps,
+                 batch_size=_batch_size, n_steps=128, nminibatches=4, verbose=0,
+                 tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
 
         super(DFP, self).__init__(policy=policy, env=env, verbose=verbose, requires_vec_env=True,
@@ -86,7 +93,7 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space, self.goalmap_space,self.n_envs, 1, n_batch_step, 
+                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step,
                                         pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
@@ -137,10 +144,10 @@ class DFP(BaseRLModel):
         if self.hindsight:
             print()
             print("Using HindSight to collect trajectories...")
-        
+
         print()
         print("Save Path:", save_path)
-        print("Save Interval:", save_interval/100000, "M")
+        print("Save Interval:", save_interval / 100000, "M")
         print()
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         save_interval_st = save_interval
@@ -176,7 +183,8 @@ class DFP(BaseRLModel):
                 action = np.array([action])
 
                 new_obs, rew, done, terminal_obs, win = self.env.step([(action, 0)])
-                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0], hindsight=self.hindsight)
+                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0],
+                                       hindsight=self.hindsight)
                 obs = new_obs
                 if writer is not None:
                     summary_eps = tf.Summary(value=[tf.Summary.Value(tag='update_eps', simple_value=update_eps)])
@@ -236,7 +244,7 @@ class DFP(BaseRLModel):
         goals = np.tile(goal, self.future_len)
         for f in futures:
             actions.append(goals.dot(f))
-        
+
         return np.argmax(np.array(actions))
 
     def get_targets(self, actions, futures, _target_futures):

@@ -3,6 +3,7 @@ import queue
 import numpy as np
 from pommerman import constants
 from gym import spaces
+import random
 
 passage = constants.Item.Passage.value
 rigid = constants.Item.Rigid.value
@@ -36,6 +37,7 @@ def get_goal_space():
 
 def get_action_space():
     return spaces.Discrete(6)
+
 
 # 分离img \ meas \ scalars 并处理为网络的输入
 def featurize(obs):
@@ -290,3 +292,20 @@ def get_all_bomb_map(img, rang=11):
     bomb_life = np.where(flame_life != 15, flame_life, bomb_life)
 
     return bomb_life
+
+
+def choose_act(obs, act):
+    board = obs['board']
+    position = obs['position']
+    x, y = position
+    move = [(-1, 0), (1, 0), (0, -1), (0, 1)]
+    mx, my = move[act[0] - 1]
+    if x + mx < 0 or x + mx > 10 or y + my < 0 or y + my > 10 or board[x + mx][y + my] in [rigid, wood]:
+        acts = [1, 2, 3, 4]
+        for i in range(3, -1, -1):
+            r, c = move[i]
+            if x + r < 0 or x + r > 10 or y + c < 0 or y + c > 10 or board[x + r][y + c] in [rigid, wood]:
+                acts.pop(i)
+        new_act = random.sample(acts, 1)
+        return np.array(new_act)
+    return np.array(act)
