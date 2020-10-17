@@ -18,5 +18,7 @@ def arg_parser():
     parser.add_argument('--save_path', help='保存模型', default=None, type=str)
     parser.add_argument('--load_path', help='加载模型', default=None, type=str)
     parser.add_argument('--log_path', help='日志', default=None, type=str)
+    parser.add_argument('--pgn', help='日志', default=False, type=bool)
+    parser.add_argument('--hindsight', help='日志', default=False, type=bool)
 
     return parser

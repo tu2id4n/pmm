@@ -10,6 +10,11 @@ import random
 from . import env_utils
 
 
+max_setps = 800
+#  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
+meas_size = 7
+
+
 class Pomme(v0.Pomme):
     '''The hardest pommerman environment. This class expands env v0
     adding communication between agents.'''
@@ -34,7 +39,8 @@ class Pomme(v0.Pomme):
         ]
         }
         super().__init__(*args, **kwargs)
-        self._max_steps = 200
+
+        self._max_steps = max_setps
 
     def _set_action_space(self):
         self.action_space = spaces.Tuple(
@@ -69,12 +75,9 @@ class Pomme(v0.Pomme):
         self.observation_space = spaces.Box(
             np.array(min_obs), np.array(max_obs))
 
-    def get_observations(self, reset=True):
+    def get_observations(self,):
 
         observations = super().get_observations()  # 已经获得新的self.observations了
-        if not reset:
-            observations[self.train_idx] = self.observation_pre
-            return observations
 
         for obs in observations:
             obs['message'] = self._radio_from_agent[obs['teammate']]
@@ -89,8 +92,8 @@ class Pomme(v0.Pomme):
             observation['items'] = 0
             observation['idx'] = observation['board'][observation['position']]
             observation['ammo_used'] = 0
-
             observation['goal'] = self.goal
+
             goal_board = observation['board']
             for x in range(len(goal_board)):
                 for y in range(len(goal_board)):
@@ -101,6 +104,7 @@ class Pomme(v0.Pomme):
 
         observation['goal'] = self.observation_pre['goal']
         observation['goal_position'] = self.observation_pre['goal_position']
+
         # 通过obs_pre 和obs_now 对比，将my_bomb, woods, frags, items --> obs_now.
         extra_bomb = constants.Item.ExtraBomb.value
         incr_range = constants.Item.IncrRange.value
@@ -183,12 +187,20 @@ class Pomme(v0.Pomme):
             if e not in alives:
                 frags += 1
         observation['frags'] = frags
+        self.get_items = observation['items']
+        self.achive = position == self.observation_pre['goal_position']
+        if self.achive:
+            self.generate_item(position)
+            goal_board = observation['board']
+            for x in range(len(goal_board)):
+                for y in range(len(goal_board)):
+                    if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value, constants.Item.Kick.value]:
+                        observation['goal_position'] = (x, y)
 
-        observations[self.train_idx] = observation
-        self.observations = observations
-        self.observation_pre = observation
-        if observation['goal_position'] == observation['position']:
-            self.achive = True
+
+        self.observation_pre = copy.deepcopy(observation)
+        observations[self.train_idx] = copy.deepcopy(observation)
+        self.observations = copy.deepcopy(observations)
         return observations
 
     def step(self, actions):
@@ -219,7 +231,7 @@ class Pomme(v0.Pomme):
         self._step_count += 1
         return obs, reward, done, info
 
-    def reset(self, train_idx=0, goal=None, meas_size=7):
+    def reset(self, train_idx=0, goal=None):
         assert (self._agents is not None)
         self.train_idx = train_idx
         if self._init_game_state is not None:
@@ -240,17 +252,22 @@ class Pomme(v0.Pomme):
 
         self.observation_pre = None
         self.achive = False
-        self.goal = self.get_goal(goal, meas_size=meas_size)
+        self.goal = self.get_goal(goal)
+        self.get_items = 0
         return self.get_observations()
 
     def make_board(self):
         self._board = env_utils.make_board(self._board_size, self._num_rigid,
                                          self._num_wood, len(self._agents))
 
+    def generate_item(self, position):
+        self._board = env_utils.generate_item(self._board, position, self._board_size)
+        self.achive = False
+
     def make_items(self):
         self._items = env_utils.make_items(self._board, self._num_items)
 
-    def get_goal(self, goal=None, meas_size=None):
+    def get_goal(self, goal=None):
         # woods, items, ammos, frags
         if goal:
             return np.array(goal)
@@ -270,32 +287,28 @@ class Pomme(v0.Pomme):
     def _get_done(self, is_dead):
         if self._step_count >= self._max_steps:
             return True
-        elif self.achive:
-            return True
         elif is_dead:
             return True
         return False
 
     def get_rewards_maze_v1(self, done, is_dead):
-        if self.achive:
-            return[0, 0, 0, 0]
-        elif is_dead:
+        if is_dead:
             return [-200, -1, -1, -1]
-        return [-1, -1, -1, -1]
+        if done:
+            return [self.get_items, 0, 0, 0]
+        return [0, 0, 0, 0]
 
     def _get_info(self, done, rewards, is_dead):
         if done:
-            if self.achive:
-                return {
-                    'result': constants.Result.Win,
-                }
             if self._step_count >= self._max_steps:
                 return {
-                    'result': constants.Result.Tie,
+                    'result': constants.Result.Win,
+                    'get items number': self.get_items,
                 }
             elif is_dead:
                 return {
                     'result': constants.Result.Loss,
+                    'get items number': self.get_items,
                 }
         return {
             'result': constants.Result.Incomplete,

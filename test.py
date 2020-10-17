@@ -12,19 +12,19 @@ Flag = False
 class Test:
     def __init__(self):
         self.agent_list = [
-            _agents.SuicideAgent(),
+            agents.SimpleAgent(),
             _agents.SuicideAgent(),
             _agents.SuicideAgent(),
             _agents.SuicideAgent(),
         ]
 
         self.env = pommerman.make('maze-v1', self.agent_list)
-        self.model = DFP.load(load_path="model/goal_condition_maze_v1_10M.zip")
+        self.model = DFP.load(load_path="model/maze1_dfp_7M.zip")
         self.train_idx = 0
-        self.episode = 1000
         #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
-        self.goal = [0, 0, 0, 0, 0, 1, -1]
+        self.goal = [0, 0, -1, 0, -1, 1, -0.05]
         self.flag = False
+        self.episode = 1000
 
     def run(self):
         print("Press D in game window to switch to next game episode")
@@ -35,16 +35,10 @@ class Test:
             first_render = True
             while not done:
                 all_actions = self.env.act(obs)
-                # print("primitive", all_actions[train_idx])
-
                 featurize_obs = featurize.featurize(obs[self.train_idx])
                 train_act = self.model.predict(featurize_obs)
                 all_actions[self.train_idx] = train_act
                 print("train_act:", train_act)
-                # print('scas', featurize_obs[1])
-                # print('meas', featurize_obs[2])
-                # print('goal', featurize_obs[3])
-                # print("train", all_actions[self.train_idx])
 
                 obs, rewards, done, info = self.env.step(all_actions)
                 self.env.render()

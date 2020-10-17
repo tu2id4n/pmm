@@ -32,19 +32,20 @@ class ReplayBuffer(object):
         if hindsight and random.random() < 0.5:
             new_imgs = np.stack(imgs, axis=2)
             new_imgs = np.stack(new_imgs, axis=2)
-
+            
             new_timgs = np.stack(t_imgs, axis=2)
             new_timgs = np.stack(new_timgs, axis=2)
-
+            
             new_gms = np.stack(gms, axis=2)
             new_gms = np.stack(new_gms, axis=2)
-
+           
             new_gms[2] = np.logical_or(new_imgs[5], new_timgs[5])
-            new_gms = np.stack(gms, axis=2)
-
+            new_gms = np.stack(new_gms, axis=2)
+           
             new_tmeas = t_meas
             new_tmeas[-2] = True
-            data = (imgs, scas, meas, goals, new_gms, actions, rews, dones, wins, 
+    
+            data = (imgs, scas, meas, goals, new_gms, actions, rews, dones, wins,
                     t_imgs, t_scas, new_tmeas, t_goals, new_gms)
 
         self.storage.append(data)
@@ -81,7 +82,7 @@ class ReplayBuffer(object):
                 terminal = True
 
         return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
-            np.array(actions), np.array(futures)
+               np.array(actions), np.array(futures)
 
     def compute_future(self, idx):
         future = []
@@ -121,4 +122,4 @@ class ReplayBuffer(object):
             futures.append(future)
 
         return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
-            np.array(actions), np.array(futures)
+               np.array(actions), np.array(futures)

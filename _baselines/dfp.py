@@ -22,7 +22,7 @@ from stable_baselines.common.policies import ActorCriticPolicy
 
 class DFP(BaseRLModel):
     def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=1000, time_spans=[1, 3, 6, 9, 12], hindsight=True,
+                 learning_starts=1000, time_spans=[1, 5, 10, 20, 30], hindsight=False, 
                  exploration_fraction=0.1, exploration_final_eps=0.02, batch_size=32, n_steps=128, nminibatches=4,
                  verbose=0, tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
@@ -55,6 +55,7 @@ class DFP(BaseRLModel):
         self.episode_reward = None
         self.wins = None
         self.eps = None
+        self.pgn_params = []
 
         self.img_space = featurize.get_img_space()
         self.scas_space = featurize.get_scas_space()
@@ -85,8 +86,8 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space, self.goalmap_space,
-                                        self.n_envs, 1, n_batch_step, reuse=False, future_size=self.future_size,
+                                        self.action_space, self.goalmap_space,self.n_envs, 1, n_batch_step, 
+                                        pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
                 with tf.variable_scope('train_model', reuse=True,
@@ -94,7 +95,7 @@ class DFP(BaseRLModel):
                     train_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space,
                                               self.goal_space, self.action_space, self.goalmap_space,
                                               self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
-                                              reuse=False, future_size=self.future_size,
+                                              pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                               **self.policy_kwargs)
 
                 with tf.variable_scope("loss", reuse=False):
@@ -130,9 +131,17 @@ class DFP(BaseRLModel):
             # writer.flush()
             # writer.close()
 
-    def learn(self, total_timesteps, callback=None, tb_log_name="DFP", reset_num_timesteps=True, save_interval=10000,
-              save_path=None):
+    def learn(self, total_timesteps, callback=None, tb_log_name="DFP", reset_num_timesteps=True,
+              save_interval=10000, save_path=None):
 
+        if self.hindsight:
+            print()
+            print("Using HindSight to collect trajectories...")
+        
+        print()
+        print("Save Path:", save_path)
+        print("Save Interval:", save_interval/100000, "M")
+        print()
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         save_interval_st = save_interval
 
@@ -276,7 +285,8 @@ class DFP(BaseRLModel):
             "meas_size": self.meas_size,
             "future_size": self.future_size,
             "n_envs": self.n_envs,
-            "hindsight:": self.hindsight,
+            "hindsight": self.hindsight,
+            "pgn_params": self.pgn_params,
             "policy_kwargs": self.policy_kwargs,
         }
 
@@ -285,7 +295,7 @@ class DFP(BaseRLModel):
         self._save_to_file(save_path, data=data, params=params_to_save, cloudpickle=cloudpickle)
 
     @classmethod
-    def load(cls, load_path, env=None, tensorboard_log=None, custom_objects=None, **kwargs):
+    def load(cls, load_path, env=None, tensorboard_log=None, custom_objects=None, pgn=False, **kwargs):
         print("Loading...")
         print(load_path)
         data, params = cls._load_from_file(load_path, custom_objects=custom_objects)
@@ -303,6 +313,26 @@ class DFP(BaseRLModel):
         model.tensorboard_log = tensorboard_log
         model.setup_model()
         model.load_parameters(params)
+
+        if pgn:  # ntc.
+            print()
+            print("Using PGN Load...")
+            prev_params = model.get_parameters()
+            len_params = len(prev_params)
+            pgn_params = {}
+            for _ in range(len_params):
+                key, val = prev_params.popitem()
+                key = key[6:-2]
+                pgn_params[key] = val
+                print(key, val.shape)
+            model.pgn_params.append(pgn_params)
+            print("Save the prev learned params...")
+            print("num of prev networks = ", len(model.pgn_params))
+            print("len_parm = ", len_params)
+            print()
+            if env is not None:
+                model.action_space = featurize.get_action_space()
+            model.setup_model()
 
         return model
 

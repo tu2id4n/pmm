@@ -175,3 +175,24 @@ def make_items(board, num_items):
         ]).value
         num_items -= 1
     return item_positions
+
+
+def generate_item(board, position, size=11):
+
+    def lay_item(value, inaccess, board):
+        '''Lays all of the walls on a board'''
+        x = random.randint(0,10)
+        y = random.randint(0,10)
+        while (x, y) in inaccess:
+            x = random.randint(0,10)
+            y = random.randint(0,10)
+        board[x, y] = value
+        return board
+
+    agents = [(1, 1), (size - 2, 1), (1, size - 2), (size - 2, size - 2)]
+    inaccess = utility.inaccessible_passages(board, agents)
+    inaccess.append(position)
+    item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange,constants.Item.Kick]).value
+    board = lay_item(item_value, inaccess, board)
+    
+    return board

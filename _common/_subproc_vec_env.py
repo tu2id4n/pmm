@@ -11,23 +11,26 @@ from _common import featurize
 import numpy as np
 import random
 
+#  设置训练的数据
+train_goal = [0, 0, -1, 0, -1, 1, -0.05]
+train_idx = 0
+teammates = [train_idx, (train_idx + 2) % 4]
+teammates.sort()
+enemies = [(train_idx + 1) % 4, (train_idx + 3) % 4]
+enemies.sort()
+
 
 def _worker(remote, parent_remote, env_fn_wrapper):
     parent_remote.close()
     env = env_fn_wrapper.var()
-    # TODO:记得设置训练智能体的 index
-    train_idx = 0  # 设置训练的 agent 的 index
-    teammates = [train_idx, (train_idx + 2) % 4]
-    teammates.sort()
-    enemies = [(train_idx + 1) % 4, (train_idx + 3) % 4]
-    enemies.sort()
+
     while True:
         try:
             cmd, data = remote.recv()
             if cmd == 'step':
                 train_act, update_eps = data
 
-                whole_obs = env.get_observations(reset=False)
+                whole_obs = env.get_observations()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
 
                 if random.random() < update_eps:  # 使用 simple agent 进行探索
@@ -45,7 +48,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 if done:  # 如果结束, 重新开一把
                     if info['result'] == constants.Result.Win:
                         win = 1
-                    whole_obs = env.reset(train_idx=train_idx, goal=[0, 0, 0, 0, 0, 1, -1])  # 重新开一把
+                    whole_obs = env.reset(train_idx=train_idx, goal=train_goal)  # 重新开一把
 
                 obs = featurize.featurize(whole_obs[train_idx])
 
@@ -54,7 +57,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
 
             elif cmd == 'reset':
                 #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
-                whole_obs = env.reset(train_idx=train_idx, goal=[0, 0, 0, 0, 0, 1, -1])
+                whole_obs = env.reset(train_idx=train_idx, goal=train_goal)
                 obs = featurize.featurize(whole_obs[train_idx])
 
                 remote.send(obs)
