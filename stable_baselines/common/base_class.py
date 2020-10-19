@@ -448,9 +448,9 @@ class BaseRLModel(ABC):
             not_updated_variables.remove(param_name)
 
         # Check that we updated all parameters if exact_match=True
-        if exact_match and len(not_updated_variables) > 0:
-            raise RuntimeError("Load dictionary did not contain all variables. " +
-                               "Missing variables: {}".format(", ".join(not_updated_variables)))
+        # if exact_match and len(not_updated_variables) > 0:
+        #     raise RuntimeError("Load dictionary did not contain all variables. " +
+        #                        "Missing variables: {}".format(", ".join(not_updated_variables)))
 
         self.sess.run(param_update_ops, feed_dict=feed_dict)
 

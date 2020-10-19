@@ -5,6 +5,10 @@
 meas增加探索坐标
 stop simple mix
 
+# 部分修改
+base_class: 450行以下内容注释.  
+configs: 注册部分游戏.  
+
 # ENV
 v21: DFP环境.  
   goal: 目标mea
@@ -24,8 +28,7 @@ maze_v1:
 # features
 goal_map: 11 * 11 * 3  
 imgs: 11 * 11 * 10  
-goals: [woods, items, ammo_used, frags, is_dead, reach_goal, steps]  
-meas: [woods, items, ammo_used, frags, is_dead, reach_goal, steps]  
+goals and meas: 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
 scas: [steps, ammo, strength, kick, teammate, enemy1, enemy2]  
 
 # run

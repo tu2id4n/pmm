@@ -9,10 +9,9 @@ import copy
 import random
 from . import env_utils
 
-
 max_setps = 800
-#  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
-meas_size = 7
+# 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
+meas_size = 8
 
 
 class Pomme(v0.Pomme):
@@ -75,8 +74,7 @@ class Pomme(v0.Pomme):
         self.observation_space = spaces.Box(
             np.array(min_obs), np.array(max_obs))
 
-    def get_observations(self,):
-
+    def get_observations(self, ):
         observations = super().get_observations()  # 已经获得新的self.observations了
 
         for obs in observations:
@@ -93,17 +91,13 @@ class Pomme(v0.Pomme):
             observation['idx'] = observation['board'][observation['position']]
             observation['ammo_used'] = 0
             observation['goal'] = self.goal
-
-            goal_board = observation['board']
-            for x in range(len(goal_board)):
-                for y in range(len(goal_board)):
-                    if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value, constants.Item.Kick.value]:
-                        observation['goal_position'] = (x, y)
+            observation['imove_counts'] = -1
+            observation['reach_goals'] = 0
+            observation['goal_positions'] = []
 
             self.observation_pre = observation
 
         observation['goal'] = self.observation_pre['goal']
-        observation['goal_position'] = self.observation_pre['goal_position']
 
         # 通过obs_pre 和obs_now 对比，将my_bomb, woods, frags, items --> obs_now.
         extra_bomb = constants.Item.ExtraBomb.value
@@ -123,6 +117,9 @@ class Pomme(v0.Pomme):
         woods_pre = self.observation_pre['woods']
         frags_pre = self.observation_pre['frags']
         ammo_used_pre = self.observation_pre['ammo_used']
+        position_pre = self.observation_pre['position']
+        imove_counts_pre = self.observation_pre['imove_counts']
+        reach_goals_pre = self.observation_pre['reach_goals']
 
         position = observation['position']
         strength = observation['blast_strength'] - 1
@@ -148,7 +145,7 @@ class Pomme(v0.Pomme):
                 my_bomb.append(my_bomb_pre[bf_idx])
 
         # 再加入最新放置的 bomb
-        if (bomb_life[position] == 9):
+        if bomb_life[position] == 9:
             my_bomb.append([position[0], position[1], 9, strength])
 
         observation['my_bomb'] = my_bomb
@@ -168,7 +165,7 @@ class Pomme(v0.Pomme):
                     mb_pos = [mb[0], mb[1]]
                     mb_str = mb[3]
                     # 在爆炸范围内深度优先
-                    for t in range(mb[3]):
+                    for t in range(mb_str):
                         mb_pos[0] = act_toward[0] + mb_pos[0]
                         mb_pos[1] = act_toward[1] + mb_pos[1]
                         # 超出界面
@@ -187,16 +184,37 @@ class Pomme(v0.Pomme):
             if e not in alives:
                 frags += 1
         observation['frags'] = frags
-        self.get_items = observation['items']
-        self.achive = position == self.observation_pre['goal_position']
-        if self.achive:
-            self.generate_item(position)
-            goal_board = observation['board']
-            for x in range(len(goal_board)):
-                for y in range(len(goal_board)):
-                    if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value, constants.Item.Kick.value]:
-                        observation['goal_position'] = (x, y)
 
+        # 总共获得了多少个 items
+        self.get_items = observation['items']
+
+        # 是否达成目标
+        self.achive = position in self.observation_pre['goal_positions']
+
+        self.interval += 1
+        # 如果达成目标则重新设置目标
+        if self.achive or (self.interval+1) % 50 == 0:
+            if self.achive:
+                reach_goals_pre += 1
+            self.interval = 0
+            self.generate_item(position)
+
+        observation['reach_goals'] = reach_goals_pre
+
+        # 添加goal_positions
+        goal_board = observation['board']
+        goal_positons = []
+        for x in range(len(goal_board)):
+            for y in range(len(goal_board)):
+                if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
+                                          constants.Item.Kick.value]:
+                    goal_positons.append((x, y))
+        observation['goal_positions'] = goal_positons
+
+        # 是否移动
+        if position == position_pre:
+            imove_counts_pre += 1
+        observation['imove_counts'] = imove_counts_pre
 
         self.observation_pre = copy.deepcopy(observation)
         observations[self.train_idx] = copy.deepcopy(observation)
@@ -254,11 +272,13 @@ class Pomme(v0.Pomme):
         self.achive = False
         self.goal = self.get_goal(goal)
         self.get_items = 0
+        self.interval = 0
         return self.get_observations()
 
     def make_board(self):
         self._board = env_utils.make_board(self._board_size, self._num_rigid,
-                                         self._num_wood, len(self._agents))
+                                           self._num_wood, len(self._agents))
+        # self._board = env_utils.generate_item(self._board, (1, 1), self._board_size)
 
     def generate_item(self, position):
         self._board = env_utils.generate_item(self._board, position, self._board_size)
@@ -268,20 +288,19 @@ class Pomme(v0.Pomme):
         self._items = env_utils.make_items(self._board, self._num_items)
 
     def get_goal(self, goal=None):
-        # woods, items, ammos, frags
         if goal:
             return np.array(goal)
 
         goal = np.zeros(meas_size)
 
-        #  7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, step]
+        # 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
         goal[0] = random.uniform(0, 1)
         goal[1] = random.uniform(0, 1)
         goal[2] = random.uniform(-1, 1)
-        goal[3] = random.uniform(0, 1)
+        goal[3] = 0  # frags
         goal[4] = random.uniform(-1, 0)
         goal[5] = random.uniform(0, 1)
-        goal[6] = random.uniform(-1, 0)
+        goal[6] = random.uniform(-0.02, 0)
         return np.array(goal)
 
     def _get_done(self, is_dead):
@@ -292,8 +311,6 @@ class Pomme(v0.Pomme):
         return False
 
     def get_rewards_maze_v1(self, done, is_dead):
-        if is_dead:
-            return [-200, -1, -1, -1]
         if done:
             return [self.get_items, 0, 0, 0]
         return [0, 0, 0, 0]

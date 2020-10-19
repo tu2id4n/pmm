@@ -10,6 +10,21 @@ import numpy as np
 from pommerman import constants
 from pommerman import utility
 
+passage = constants.Item.Passage.value
+rigid = constants.Item.Rigid.value
+wood = constants.Item.Wood.value
+bomb = constants.Item.Bomb.value
+flams = constants.Item.Flames.value
+fog = constants.Item.Flames.Fog.value
+extra = constants.Item.ExtraBomb.value
+incr = constants.Item.IncrRange.value
+kick = constants.Item.Kick.value
+agent0 = constants.Item.Agent0.value
+agent1 = constants.Item.Agent1.value
+agent2 = constants.Item.Agent2.value
+agent3 = constants.Item.Agent3.value
+
+
 def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
 
@@ -101,10 +116,10 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
                 coordinates.remove((size - i - 1, 1))
                 coordinates.remove((i, size - 2))
                 coordinates.remove((size - 2, i))
-        
+
         coordinates.remove((1, 0))
         coordinates.remove((0, 1))
-        coordinates.remove((size - 2, size- 1))
+        coordinates.remove((size - 2, size - 1))
         coordinates.remove((size - 1, size - 2))
 
         if num_agents == 4:
@@ -138,10 +153,11 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
         #     num_wood = lay_wall(constants.Item.Wood.value, num_wood,
         #                         coordinates, board)
 
+        # Lay first target
         num_item = 1
         inaccess = utility.inaccessible_passages(board, agents)
         while num_item > 0:
-            item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange,constants.Item.Kick]).value
+            item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange, constants.Item.Kick]).value
             num_item = lay_item(item_value, num_item, coordinates, inaccess, board)
 
         return board, agents
@@ -156,7 +172,7 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
 
     return board
 
-    
+
 def make_items(board, num_items):
     '''Lays all of the items on the board'''
     item_positions = {}
@@ -165,7 +181,7 @@ def make_items(board, num_items):
         row = random.randint(0, len(board) - 1)
         col = random.randint(0, len(board[0]) - 1)
         # if board[row, col] != constants.Item.Wood.value:
-            # continue
+        # continue
         if (row, col) in item_positions:
             continue
 
@@ -178,21 +194,20 @@ def make_items(board, num_items):
 
 
 def generate_item(board, position, size=11):
-
     def lay_item(value, inaccess, board):
         '''Lays all of the walls on a board'''
-        x = random.randint(0,10)
-        y = random.randint(0,10)
-        while (x, y) in inaccess:
-            x = random.randint(0,10)
-            y = random.randint(0,10)
+        x = random.randint(0, 10)
+        y = random.randint(0, 10)
+        while (x, y) in inaccess or board[x, y] != passage:
+            x = random.randint(0, 10)
+            y = random.randint(0, 10)
         board[x, y] = value
         return board
 
     agents = [(1, 1), (size - 2, 1), (1, size - 2), (size - 2, size - 2)]
     inaccess = utility.inaccessible_passages(board, agents)
     inaccess.append(position)
-    item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange,constants.Item.Kick]).value
+    item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange, constants.Item.Kick]).value
     board = lay_item(item_value, inaccess, board)
-    
+
     return board

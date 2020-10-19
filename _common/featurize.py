@@ -20,19 +20,21 @@ def get_img_space():
 
 
 def get_goalmap_space():
-    return spaces.Box(low=0, high=1, shape=(11, 11, 3))
+    return spaces.Box(low=0, high=1, shape=(11, 11, 4))
 
 
 def get_scas_space():
-    return spaces.Box(low=0, high=1, shape=(7,))  # 7 -> [steps, ammo, strength, kick, teammate, enemy1, enemy2]
+    return spaces.Box(low=0, high=1, shape=(7,))
+    # 7dim: [steps, ammo, strength, kick, teammate, enemy1, enemy2]
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(7,))  # 7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, steps]
+    return spaces.Box(low=0, high=1, shape=(8,))
+    # 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
 
 
 def get_goal_space():
-    return spaces.Box(low=-1, high=1, shape=(7,))
+    return get_meas_space()
 
 
 def get_action_space():
@@ -66,14 +68,16 @@ def featurize(obs):
     meas['frags'] = obs['frags']
     meas['is_dead'] = obs['is_dead']
     meas['position'] = obs['position']
-    meas['goal_position'] = obs['goal_position']
-    meas['step_count'] = obs['step_count']
+    meas['goal_positions'] = obs['goal_positions']
+    meas['reach_goals'] = obs['reach_goals']
+    meas['step_counts'] = obs['step_count']
+    meas['imove_counts'] = obs['imove_counts']
     meas_fea = measurements_extra(meas)
 
-    # 提取目标
+    # 提取 goal
     goal_fea = np.array(obs['goal'])
 
-    # 提取goalmap
+    # 提取 goalmap
     goalmap_fea = goalmap_extra(img)
 
     return img_fea, scas_fea, meas_fea, goal_fea, goalmap_fea  # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
@@ -118,12 +122,10 @@ def img_extra(img):
 def goalmap_extra(img):
     board = img['board']
     maps = []
-    for i in [passage, rigid]:  # fog?
+    for i in [passage, rigid, img['idx'], extra_bomb]:
         maps.append(board == i)
-    maps.append(np.logical_or(
-        board == img['idx'], board == img['goal_position']))
 
-    return np.stack(maps, axis=2)  # 11 * 11 * 3
+    return np.stack(maps, axis=2)  # 11 * 11 * 4
 
 
 # 标量提取
@@ -153,6 +155,7 @@ def scalars_extra(scas):
 
 
 # 衡量指标提取
+# 8dim: 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
 def measurements_extra(meas):
     maps = []
     woods = meas['woods']  # / 15 if meas['woods'] / 15 <= 1 else 1
@@ -164,9 +167,10 @@ def measurements_extra(meas):
     maps.append(ammo_used)
     maps.append(meas['frags'])
     maps.append(meas['is_dead'])
-    maps.append(meas['position'] == meas['goal_position'])
-    maps.append(meas['step_count'])
-    return np.array(maps)  # 7 -> [woods, items, ammo_used, frags, is_dead, reach_goal, steps]
+    maps.append(meas['reach_goals'])
+    maps.append(meas['step_counts'])
+    maps.append(meas['imove_counts'])
+    return np.array(maps)
 
 
 # 提取特定位置 position_bomb_map
@@ -295,11 +299,12 @@ def get_all_bomb_map(img, rang=11):
 
 
 def choose_act(obs, act):
+    act = act[0]
     board = obs['board']
     position = obs['position']
     x, y = position
     move = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    mx, my = move[act[0] - 1]
+    mx, my = move[act - 1]
     if x + mx < 0 or x + mx > 10 or y + my < 0 or y + my > 10 or board[x + mx][y + my] in [rigid, wood]:
         acts = [1, 2, 3, 4]
         for i in range(3, -1, -1):
@@ -308,4 +313,4 @@ def choose_act(obs, act):
                 acts.pop(i)
         new_act = random.sample(acts, 1)
         return np.array(new_act)
-    return np.array(act)
+    return np.array([act])

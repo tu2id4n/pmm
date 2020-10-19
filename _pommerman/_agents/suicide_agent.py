@@ -9,4 +9,4 @@ class SuicideAgent(BaseAgent):
     #     self._character = character
 
     def act(self, obs, action_space):
-        return 1
+        return 5

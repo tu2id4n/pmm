@@ -9,6 +9,9 @@ class ReplayBuffer(object):
         self.time_spans = time_spans
         self.future_size = len(time_spans)
         self.batch_size = batch_size
+        self.her_size = 15
+        self.K = 4
+        self.her = 0
 
     def can_sample(self):
         """
@@ -28,25 +31,33 @@ class ReplayBuffer(object):
         self.storage.append(data)
         while len(self.storage) > self.maxsize:
             self.storage.pop(0)
+        
+        self.her += 1
+        if hindsight and self.her > self.her_size:
+            self.her = 0
+            st = len(self.storage) - self.her_size - 1
+            for t in range(self.her_size):
+                data = self.storage[st+t]
+                d_img, d_sca, d_mea, d_goal, d_gm, d_action, d_rew, d_done, d_win, d_t_img, d_t_sca, d_t_mea, d_t_goal, d_t_gm = data
+                for k in range(self.K):
+                    f = random.randint(t, self.her_size)
+                    f_data = self.storage[st+f]
+                    _, _, _, _, f_gm, _, _, _, _, _, _, _, _, _ = f_data
+                   
+                    new_gm = np.stack(d_gm, axis=2)
+                    new_gm = np.stack(new_gm, axis=2)
 
-        if hindsight and random.random() < 0.5:
-            new_imgs = np.stack(imgs, axis=2)
-            new_imgs = np.stack(new_imgs, axis=2)
-            
-            new_timgs = np.stack(t_imgs, axis=2)
-            new_timgs = np.stack(new_timgs, axis=2)
-            
-            new_gms = np.stack(gms, axis=2)
-            new_gms = np.stack(new_gms, axis=2)
-           
-            new_gms[2] = np.logical_or(new_imgs[5], new_timgs[5])
-            new_gms = np.stack(new_gms, axis=2)
-           
-            new_tmeas = t_meas
-            new_tmeas[-2] = True
-    
-            data = (imgs, scas, meas, goals, new_gms, actions, rews, dones, wins,
-                    t_imgs, t_scas, new_tmeas, t_goals, new_gms)
+                    new_tgm = np.stack(f_gm, axis=2)
+                    new_tgm = np.stack(new_tgm, axis=2)
+
+                    new_gm[3] = new_tgm[2]
+                    new_mea = d_mea
+                    if np.logical_and(new_gm[3], new_tgm[2]).any():
+                        new_mea[-2] = True
+
+                    new_gm = np.stack(new_gm, axis=2)
+                    data = (d_img, d_sca, new_mea, d_goal, new_gm, d_action, d_rew, d_done, d_win, d_t_img, d_t_sca, d_t_mea, d_t_goal, d_t_gm)
+                    self.storage.append(data)
 
         self.storage.append(data)
         while len(self.storage) > self.maxsize:

@@ -107,67 +107,80 @@ class DFPPolicy(BasePolicy):
 
             activ = tf.nn.tanh
             # action_stream
-            action_stream = [None] * self.n_actions
-            if pgn and pgn_params:
+
+            if pgn:
                 print()
                 print("PGN and DFP...")
                 print()
+                if pgn_params:
+                    print("PGN Loading...")
+                    action_stream = [None] * 6
+                    with tf.variable_scope('action_fc', reuse=reuse):
+                        action_stream[0] = activ(linear(
+                            extracted_input, 'act' + str(0), n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
-                with tf.variable_scope('action_fc', reuse=reuse):
-                    action_stream[0] = activ(linear(
-                        extracted_input, 'act' + str(0), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                    with tf.variable_scope('action_fc', reuse=reuse):
+                        action_stream[5] = activ(linear(
+                            extracted_input, 'act' + str(5), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                    len_params = len(pgn_params)
+                    prev_stream = [[None] * self.n_actions] * len_params
+                    u_stream = [[None] * self.n_actions] * len_params
+                    for c in range(len_params):  # col, row
+                        with tf.variable_scope('prev_fc' + str(c), reuse=reuse):
+                            for r in range(1, 5):
+                                scope = 'action_fc/act' + str(r)
+                                prev_stream[c][r] = activ(pgn_linear(extracted_input, scope,
+                                                                     ww=pgn_params[c][scope + '/w'],
+                                                                     bb=pgn_params[c][scope + '/b']))
 
-                with tf.variable_scope('action_fc', reuse=reuse):
-                    action_stream[5] = activ(linear(
-                        extracted_input, 'act' + str(5), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                        with tf.variable_scope('u_fc' + str(c), reuse=reuse):
+                            for r in range(1, 5):
+                                scope = 'act' + str(r)
+                                u_stream[c][r] = activ(linear(
+                                    prev_stream[c][r], scope, n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
-                len_params = len(pgn_params)
-                prev_stream = [[None] * self.n_actions] * len_params
-                u_stream = [[None] * self.n_actions] * len_params
-                for c in range(len_params):  # col, row
-                    with tf.variable_scope('prev_fc' + str(c), reuse=reuse):
-                        for r in range(1, 5):
-                            scope = 'action_fc/act' + str(r)
-                            prev_stream[c][r] = activ(pgn_linear(extracted_input, scope,
-                                                                 ww=pgn_params[c][scope + '/w'],
-                                                                 bb=pgn_params[c][scope + '/b']))
+                    usum_stream = [None] * self.n_actions
+                    for r in range(1, 5):
+                        usum_stream[r] = u_stream[0][r]
+                        for c in range(1, len(u_stream)):
+                            usum_stream[r] = tf.add(usum_stream[r], u_stream[c][r])
 
-                    with tf.variable_scope('u_fc' + str(c), reuse=reuse):
-                        for r in range(1, 5):
-                            scope = 'act' + str(r)
-                            u_stream[c][r] = activ(linear(
-                                prev_stream[c][r], scope, n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                    with tf.variable_scope('action_fc', reuse=reuse):
+                        for i in range(1, 5):
+                            action_stream[i] = linear(
+                                extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
+                            action_stream[i] = activ(tf.add(action_stream[i], usum_stream[i]))
+                else:
+                    print("DFP Loading...")
 
-                usum_stream = [None] * self.n_actions
-                for r in range(1, 5):
-                    usum_stream[r] = u_stream[0][r]
-                    for c in range(1, len(u_stream)):
-                        usum_stream[r] = tf.add(usum_stream[r], u_stream[c][r])
-
-                with tf.variable_scope('action_fc', reuse=reuse):
-                    for i in range(1, 5):
-                        action_stream[i] = linear(
-                            extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
-                        action_stream[i] = activ(tf.add(action_stream[i], usum_stream[i]))
+                    action_stream = [None] * 6
+                    with tf.variable_scope('action_fc', reuse=reuse):
+                        for i in range(6):
+                            action_stream[i - 1] = activ(linear(
+                                extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
             else:
                 print()
                 print("Pure DFP...")
                 print()
 
+                action_stream = [None] * 4
+
                 with tf.variable_scope('action_fc', reuse=reuse):
-                    for i in range(self.n_actions):
-                        action_stream[i] = activ(linear(
+                    for i in range(1, 5):
+                        action_stream[i - 1] = activ(linear(
                             extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
-                action_sum = action_stream[0]
-                for i in range(1, self.n_actions):
-                    action_sum = tf.add(action_sum, action_stream[i])
+            action_sum = action_stream[0]
+            n_actions = len(action_stream)
+            print('n_actions:', n_actions)
+            for i in range(1, n_actions):
+                action_sum = tf.add(action_sum, action_stream[i])
 
-                action_mean = tf.divide(action_sum, self.n_actions)
+            action_mean = tf.divide(action_sum, n_actions)
 
-                for i in range(self.n_actions):
-                    action_stream[i] = tf.subtract(action_stream[i], action_mean)
-                    action_stream[i] = tf.add(action_stream[i], expectation_stream)
+            for i in range(n_actions):
+                action_stream[i] = tf.subtract(action_stream[i], action_mean)
+                action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):
                 self._future_stream = tf.convert_to_tensor(action_stream)

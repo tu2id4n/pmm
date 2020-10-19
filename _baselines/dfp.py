@@ -19,11 +19,13 @@ from _common import featurize, model_utils
 from .replay_buffer import ReplayBuffer
 from stable_baselines.common.policies import ActorCriticPolicy
 
-_time_span = [1, 3, 6, 12, 18]
+_time_span = [1, 3, 5]
 _exploration_final_eps = 0.2
 _exploration_fraction = 0.05
 _learning_starts = 10000
 _batch_size = 64
+_n_actions = 4
+_pgn = False
 
 
 class DFP(BaseRLModel):
@@ -70,7 +72,7 @@ class DFP(BaseRLModel):
         self.goal_space = featurize.get_goal_space()
         self.action_space = featurize.get_action_space()
         self.goalmap_space = featurize.get_goalmap_space()
-        self.n_actions = self.action_space.n
+        self.n_actions = _n_actions
         self.time_spans = time_spans
         self.future_len = len(self.time_spans)
         self.meas_size = self.meas_space.shape[0]
@@ -93,7 +95,7 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step,
+                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step, pgn=_pgn,
                                         pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
@@ -101,12 +103,12 @@ class DFP(BaseRLModel):
                                        custom_getter=tf_util.outer_scope_getter("train_model")):
                     train_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space,
                                               self.goal_space, self.action_space, self.goalmap_space,
-                                              self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
+                                              self.n_envs // self.nminibatches, self.n_steps, n_batch_train, pgn=_pgn,
                                               pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                               **self.policy_kwargs)
 
                 with tf.variable_scope("loss", reuse=False):
-                    self.targets_ph = tf.placeholder(tf.float32, [self.n_actions, None, self.future_size],
+                    self.targets_ph = tf.placeholder(tf.float32, [_n_actions, None, self.future_size],
                                                      name="targets")
                     mse_error = train_model.mse_loss(self.targets_ph)
                     self.mse = mse_error
@@ -179,7 +181,7 @@ class DFP(BaseRLModel):
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
-                action = self.make_action(obs[0][3], futures[0], update_eps=update_eps)
+                action = self.make_action(obs[0][3], futures[0], update_eps=update_eps, n_actions=_n_actions)
                 action = np.array([action])
 
                 new_obs, rew, done, terminal_obs, win = self.env.step([(action, 0)])
@@ -236,22 +238,34 @@ class DFP(BaseRLModel):
     def convert_futures(self, futures):
         return futures.swapaxes(0, 1)
 
-    def make_action(self, goal, futures, update_eps=0):
-        if random.random() < update_eps:
-            return random.randint(1, 4)  # WASD
+    def make_action(self, goal, futures, update_eps=0, n_actions=6):
+        if n_actions == 4:
+            if random.random() < update_eps:
+                return random.randint(1, 4)  # WASD
 
-        actions = []
-        goals = np.tile(goal, self.future_len)
-        for f in futures:
-            actions.append(goals.dot(f))
+            actions = []
+            goals = np.tile(goal, self.future_len)
+            for f in futures:
+                actions.append(goals.dot(f))
 
-        return np.argmax(np.array(actions))
+            return np.argmax(np.array(actions)) + 1
+        else:
+            if random.random() < update_eps:
+                return random.randint(0, 5)  # WASD Stop Bomb
+            actions = []
+            goals = np.tile(goal, self.future_len)
+            for f in futures:
+                actions.append(goals.dot(f))
+
+            return np.argmax(np.array(actions))
 
     def get_targets(self, actions, futures, _target_futures):
         target_futures = copy.deepcopy(_target_futures)
         for i in range(self.batch_size):
-            target_futures[actions[i]][i] = futures[i]
-
+            if _n_actions == 4:
+                target_futures[actions[i]-1][i] = futures[i]
+            else:
+                target_futures[actions[i]][i] = futures[i]
         # 将小于0的置为0
         # target_futures = np.where(target_futures > 0, target_futures, 0)
 
@@ -262,7 +276,7 @@ class DFP(BaseRLModel):
         futures = self.act_model.step(obs)
         futures = self.convert_futures(futures)
         # print(futures)
-        action = self.make_action(obs[0][3], futures[0], 0)
+        action = self.make_action(obs[0][3], futures[0], 0, n_actions=_n_actions)
         return action
 
     def save(self, save_path, cloudpickle=False):
@@ -303,7 +317,7 @@ class DFP(BaseRLModel):
         self._save_to_file(save_path, data=data, params=params_to_save, cloudpickle=cloudpickle)
 
     @classmethod
-    def load(cls, load_path, env=None, tensorboard_log=None, custom_objects=None, pgn=False, **kwargs):
+    def load(cls, load_path, env=None, tensorboard_log=None, custom_objects=None, **kwargs):
         print("Loading...")
         print(load_path)
         data, params = cls._load_from_file(load_path, custom_objects=custom_objects)
@@ -322,7 +336,7 @@ class DFP(BaseRLModel):
         model.setup_model()
         model.load_parameters(params)
 
-        if pgn:  # ntc.
+        if _pgn:  # ntc.
             print()
             print("Using PGN Load...")
             prev_params = model.get_parameters()
