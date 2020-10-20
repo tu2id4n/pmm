@@ -7,24 +7,23 @@ from _baselines import DFP
 import random
 import numpy as np
 
-_test = False
-_env_name = 'maze-v1'
-_model_path = "model/maze1_dfp_her_9M.zip"
-# 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
-_goal = [0, 0, 0, 0, 1, 0, -1]
+_test = True
+_env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
+_model_path = "model/maze_v0_dfp_1M.zip"
+# 8dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
+_goal = [0, 0, 0, 0, -1, 1, -1]
 _train_idx = 0
 _episode = 1000
 _flag = False
+_agent_list = [agents.SimpleAgent(),
+               _agents.SuicideAgent(),
+               _agents.SuicideAgent(),
+               _agents.SuicideAgent()]
 
 
 class Test:
     def __init__(self):
-        self.agent_list = [
-            agents.SimpleAgent(),
-            _agents.SuicideAgent(),
-            _agents.SuicideAgent(),
-            _agents.SuicideAgent(),
-        ]
+        self.agent_list = _agent_list
         self.env = pommerman.make(_env_name, self.agent_list)
         self.train_idx = _train_idx
         self.goal = _goal
@@ -68,10 +67,8 @@ class Test:
             done = False
             first_render = True
             while not done:
-                print(obs[0])
                 all_actions = self.env.act(obs)
                 obs, rewards, done, info = self.env.step(all_actions)
-                # print(obs[0]['goal_positions'])
                 self.env.render()
 
                 if first_render:  # 第一次 render env 时将当前的测试注册.

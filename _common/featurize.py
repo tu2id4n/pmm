@@ -29,8 +29,8 @@ def get_scas_space():
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(8,))
-    # 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
+    return spaces.Box(low=0, high=1, shape=(7,))
+    # 7dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 
 
 def get_goal_space():
@@ -155,7 +155,7 @@ def scalars_extra(scas):
 
 
 # 衡量指标提取
-# 8dim: 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
+# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 def measurements_extra(meas):
     maps = []
     woods = meas['woods']  # / 15 if meas['woods'] / 15 <= 1 else 1
@@ -168,7 +168,7 @@ def measurements_extra(meas):
     maps.append(meas['frags'])
     maps.append(meas['is_dead'])
     maps.append(meas['reach_goals'])
-    maps.append(meas['step_counts'])
+    # maps.append(meas['step_counts'])
     maps.append(meas['imove_counts'])
     return np.array(maps)
 

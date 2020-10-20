@@ -19,18 +19,19 @@ from _common import featurize, model_utils
 from .replay_buffer import ReplayBuffer
 from stable_baselines.common.policies import ActorCriticPolicy
 
-_time_span = [1, 3, 5]
+_time_span = [1, 2, 3, 4, 5, 10, ]
 _exploration_final_eps = 0.2
 _exploration_fraction = 0.05
-_learning_starts = 10000
-_batch_size = 64
+_learning_starts = 5000
+_batch_size = 128
 _n_actions = 4
 _pgn = False
+_gamma = 0.8
 
 
 class DFP(BaseRLModel):
-    def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=50000,
-                 learning_starts=_learning_starts, time_spans=_time_span, hindsight=False,
+    def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=15000,
+                 learning_starts=_learning_starts, time_spans=_time_span,
                  exploration_fraction=_exploration_fraction, exploration_final_eps=_exploration_final_eps,
                  batch_size=_batch_size, n_steps=128, nminibatches=4, verbose=0,
                  tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
@@ -58,7 +59,6 @@ class DFP(BaseRLModel):
         self.loss = None
 
         self.replay_buffer = None
-        self.hindsight = hindsight
         self.exploration = None
         self.summay = None
         self.episode_reward = None
@@ -120,8 +120,8 @@ class DFP(BaseRLModel):
 
                     grads = tf.gradients(self.loss, self.params)
                     grads = list(zip(grads, self.params))
-                    # optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
-                    optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
+                    optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+                    # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
                     self._train = optimizer.apply_gradients(grads)
 
                 tf.global_variables_initializer().run(session=self.sess)
@@ -143,10 +143,6 @@ class DFP(BaseRLModel):
     def learn(self, total_timesteps, callback=None, tb_log_name="DFP", reset_num_timesteps=True,
               save_interval=10000, save_path=None):
 
-        if self.hindsight:
-            print()
-            print("Using HindSight to collect trajectories...")
-
         print()
         print("Save Path:", save_path)
         print("Save Interval:", save_interval / 100000, "M")
@@ -164,8 +160,9 @@ class DFP(BaseRLModel):
                                               initial_p=1,
                                               final_p=self.exploration_final_eps)
 
-            obs = self.env.reset()  # (imgs, scas, meas, goal, gms)  ==> # [(11, 11, 10), (6, ), (4, ), (4, ), (11, 11, 3)]
-            reset = True  #
+            obs = self.env.reset()
+            # (imgs, scas, meas, goal, gms)  ==> # [(11, 11, 10), (6, ), (4, ), (4, ), (11, 11, 3)]
+            # reset = True  #
             self.episode_reward = np.zeros((1,))
             self.wins = np.zeros((1,))
 
@@ -176,7 +173,8 @@ class DFP(BaseRLModel):
                     if callback(locals(), globals()) is False:
                         break
 
-                update_eps = self.exploration.value(self.num_timesteps)
+                # update_eps = self.exploration.value(self.num_timesteps)
+                update_eps = 0.2
 
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
@@ -185,8 +183,7 @@ class DFP(BaseRLModel):
                 action = np.array([action])
 
                 new_obs, rew, done, terminal_obs, win = self.env.step([(action, 0)])
-                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0],
-                                       hindsight=self.hindsight)
+                self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0])
                 obs = new_obs
                 if writer is not None:
                     summary_eps = tf.Summary(value=[tf.Summary.Value(tag='update_eps', simple_value=update_eps)])
@@ -239,12 +236,22 @@ class DFP(BaseRLModel):
         return futures.swapaxes(0, 1)
 
     def make_action(self, goal, futures, update_eps=0, n_actions=6):
+        goals = np.tile(goal, self.future_len)
+        goals = np.array(goals, dtype=np.float32)
+        m = self.meas_size
+
+        # 衰减
+        for t in range(self.future_len):
+            ts = _time_span[t] - 1
+            gamma = _gamma ** ts
+            for i in range(m * t, m * (t + 1)):
+                goals[i] *= gamma
+        # print('goals:', goals)
+        actions = []
         if n_actions == 4:
             if random.random() < update_eps:
                 return random.randint(1, 4)  # WASD
 
-            actions = []
-            goals = np.tile(goal, self.future_len)
             for f in futures:
                 actions.append(goals.dot(f))
 
@@ -252,8 +259,6 @@ class DFP(BaseRLModel):
         else:
             if random.random() < update_eps:
                 return random.randint(0, 5)  # WASD Stop Bomb
-            actions = []
-            goals = np.tile(goal, self.future_len)
             for f in futures:
                 actions.append(goals.dot(f))
 
@@ -263,7 +268,7 @@ class DFP(BaseRLModel):
         target_futures = copy.deepcopy(_target_futures)
         for i in range(self.batch_size):
             if _n_actions == 4:
-                target_futures[actions[i]-1][i] = futures[i]
+                target_futures[actions[i] - 1][i] = futures[i]
             else:
                 target_futures[actions[i]][i] = futures[i]
         # 将小于0的置为0
@@ -275,7 +280,8 @@ class DFP(BaseRLModel):
         obs = np.array(obs).reshape(1, -1)
         futures = self.act_model.step(obs)
         futures = self.convert_futures(futures)
-        # print(futures)
+        print(futures.shape)
+        print(futures[0])
         action = self.make_action(obs[0][3], futures[0], 0, n_actions=_n_actions)
         return action
 
@@ -307,7 +313,6 @@ class DFP(BaseRLModel):
             "meas_size": self.meas_size,
             "future_size": self.future_size,
             "n_envs": self.n_envs,
-            "hindsight": self.hindsight,
             "pgn_params": self.pgn_params,
             "policy_kwargs": self.policy_kwargs,
         }

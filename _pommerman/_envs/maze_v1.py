@@ -9,9 +9,10 @@ import copy
 import random
 from . import env_utils
 
-max_setps = 800
-# 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
-meas_size = 8
+max_setps = 3000
+# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
+meas_size = 7
+max_interval = 100
 
 
 class Pomme(v0.Pomme):
@@ -132,8 +133,9 @@ class Pomme(v0.Pomme):
         observation['is_dead'] = observation['idx'] not in alives
 
         # 增加 ammo_used
-        ammo_used = self.observation_pre['ammo'] - observation['ammo']
-        ammo_used_pre = ammo_used_pre + ammo_used if ammo_used > 0 else ammo_used_pre
+        cur_ammo_used = self.observation_pre['ammo'] - observation['ammo']
+        if cur_ammo_used > 0:
+            ammo_used_pre += cur_ammo_used
         observation['ammo_used'] = ammo_used_pre
 
         # 加入 my_bomb
@@ -193,7 +195,7 @@ class Pomme(v0.Pomme):
 
         self.interval += 1
         # 如果达成目标则重新设置目标
-        if self.achive or (self.interval+1) % 50 == 0:
+        if self.achive or (self.interval + 1) % max_interval == 0:
             if self.achive:
                 reach_goals_pre += 1
             self.interval = 0
@@ -293,7 +295,7 @@ class Pomme(v0.Pomme):
 
         goal = np.zeros(meas_size)
 
-        # 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
+        # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
         goal[0] = random.uniform(0, 1)
         goal[1] = random.uniform(0, 1)
         goal[2] = random.uniform(-1, 1)

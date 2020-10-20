@@ -7,7 +7,7 @@ from stable_baselines.common import tf_util
 
 
 def simple_cnn(scaled_images, name='img', **kwargs):
-    activ = tf.nn.leaky_relu
+    activ = tf.nn.relu
     layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=256, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_2 = activ(conv(layer_1, name + 'c2', n_filters=256, filter_size=4,
@@ -19,7 +19,7 @@ def simple_cnn(scaled_images, name='img', **kwargs):
 
 
 def simple_fc(scalars, name='sca', n_dim=256):
-    activ = tf.nn.leaky_relu
+    activ = tf.nn.relu
     layer_1 = activ(
         linear(scalars, name + '1', n_hidden=n_dim, init_scale=np.sqrt(2)))
     layer_2 = activ(
@@ -100,13 +100,12 @@ class DFPPolicy(BasePolicy):
                 extracted_input = tf.concat(
                     [extracted_img, extracted_sca, extracted_mea, extracted_goal, extracted_gm], axis=1, name='concat')
 
+            activ = tf.nn.relu
+
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
-                expectation_stream = tf.nn.leaky_relu(linear(
+                expectation_stream = activ(linear(
                     extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
-
-            activ = tf.nn.tanh
-            # action_stream
 
             if pgn:
                 print()

@@ -28,7 +28,7 @@ maze_v1:
 # features
 goal_map: 11 * 11 * 3  
 imgs: 11 * 11 * 10  
-goals and meas: 8dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, step_counts↑, imove_counts↑]
+goals and meas: 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 scas: [steps, ammo, strength, kick, teammate, enemy1, enemy2]  
 
 # run
