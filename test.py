@@ -7,8 +7,8 @@ from _baselines import DFP
 import random
 import numpy as np
 
-_test = True  # False to example
-_model_path = "model/test_21M.zip"
+_test = False # False to example
+_model_path = "model/test1_2M.zip"
 _env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 _goal = [0, 0.5, 0, 0, -1, 0.5, -0.1]
@@ -42,8 +42,12 @@ class Test:
                 featurize_obs = featurize.featurize(obs[self.train_idx])
                 train_act = self.model.predict(featurize_obs)
 
-                all_actions[self.train_idx] = train_act
+                if random.random() < 0.2:
+                    all_actions[self.train_idx] = np.array([random.randint(1, 4)])
+                else:
+                    all_actions[self.train_idx] = train_act
                 obs, rewards, done, info = self.env.step(all_actions)
+                # print(obs[0]['imove_counts'])
                 # print("train_act:", train_act)
                 self.env.render()
 

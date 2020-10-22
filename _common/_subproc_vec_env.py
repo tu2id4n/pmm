@@ -13,12 +13,13 @@ import random
 
 # 设置训练的数据
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-train_goal = [0, 0.5, -0, 0, -10, 0.5, -0.1]
-train_idx = 0
-teammates = [train_idx, (train_idx + 2) % 4]
-teammates.sort()
-enemies = [(train_idx + 1) % 4, (train_idx + 3) % 4]
-enemies.sort()
+_train_goal = [0, 5, -0, 0, -10, 5, -0.1]
+_train_idx = 0
+_teammates = [_train_idx, (_train_idx + 2) % 4]
+_teammates.sort()
+_enemies = [(_train_idx + 1) % 4, (_train_idx + 3) % 4]
+_enemies.sort()
+_random_explore = True
 
 
 def _worker(remote, parent_remote, env_fn_wrapper):
@@ -34,27 +35,35 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 whole_obs = env.get_observations()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
 
-                if random.random() > update_eps:  # 使用 simple agent 进行探索
-                    all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
+                if random.random() < update_eps:
+                    if _random_explore:
+                        # 使用随机探索
+                        all_actions[_train_idx] = np.array([random.randint(1, 4)])
+                    # else: 使用 simple agent 进行探索
+                else:
+                    # 使用网络输出动作
+                    all_actions[_train_idx] = train_act[0]
+
+                real_act = all_actions[_train_idx]
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
-                rew = whole_rew[train_idx]  # 得到训练智能体的当前步的 reward
-                info['terminal_obs'] = featurize.featurize(whole_obs[train_idx])  # 保存最后一帧
+                rew = whole_rew[_train_idx]  # 得到训练智能体的当前步的 reward
+                info['terminal_obs'] = featurize.featurize(whole_obs[_train_idx])  # 保存最后一帧
 
                 win = 0  # 输出胜率
                 if done:  # 如果结束, 重新开一把
                     if info['result'] == constants.Result.Win:
                         win = 1
-                    whole_obs = env.reset(train_idx=train_idx, goal=train_goal)  # 重新开一把
+                    whole_obs = env.reset(train_idx=_train_idx, goal=_train_goal)  # 重新开一把
 
-                obs = featurize.featurize(whole_obs[train_idx])
+                obs = featurize.featurize(whole_obs[_train_idx])
 
                 # 所以done对应的是下一个episode的开始
-                remote.send((obs, rew, done, info['terminal_obs'], win))
+                remote.send((obs, rew, done, info['terminal_obs'], win, real_act))
 
             elif cmd == 'reset':
-                whole_obs = env.reset(train_idx=train_idx, goal=train_goal)
-                obs = featurize.featurize(whole_obs[train_idx])
+                whole_obs = env.reset(train_idx=_train_idx, goal=_train_goal)
+                obs = featurize.featurize(whole_obs[_train_idx])
 
                 remote.send(obs)
 
@@ -144,8 +153,8 @@ class SubprocVecEnv(VecEnv):
     def step_wait(self):
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
-        obs, rews, dones, terminal_obs, wins = zip(*results)
-        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(terminal_obs), np.stack(wins)
+        obs, rews, dones, terminal_obs, wins, acts = zip(*results)
+        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(terminal_obs), np.stack(wins), np.stack(acts)
 
     def reset(self):
         for remote in self.remotes:

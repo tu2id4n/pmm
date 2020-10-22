@@ -23,7 +23,7 @@ agent0 = constants.Item.Agent0.value
 agent1 = constants.Item.Agent1.value
 agent2 = constants.Item.Agent2.value
 agent3 = constants.Item.Agent3.value
-_num_rigid = 50
+_num_rigid = 36
 
 def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
@@ -154,7 +154,7 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
         #                         coordinates, board)
 
         # Lay first target
-        num_item = 1
+        num_item = 0
         inaccess = utility.inaccessible_passages(board, agents)
         while num_item > 0:
             item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange, constants.Item.Kick]).value

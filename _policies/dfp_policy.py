@@ -5,28 +5,36 @@ from stable_baselines.common.input import observation_input
 from stable_baselines.a2c.utils import ortho_init
 from stable_baselines.common import tf_util
 
-
 _initializer = tf.glorot_normal_initializer()
 
-def simple_cnn(scaled_images, name='img', **kwargs):
+
+def img_cnn(scaled_images, name='img', **kwargs):
     activ = tf.nn.relu
-    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=256, filter_size=8,
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=256, filter_size=4,
+    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=256, filter_size=3,
+    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=64, filter_size=3,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, name + 'fc1', n_hidden=512, init_scale=np.sqrt(2)))
+    return activ(linear(layer_3, name + 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
 
 
-def simple_fc(scalars, name='sca', n_dim=256):
+def gm_cnn(scaled_images, name='gm', **kwargs):
+    activ = tf.nn.relu
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=32, filter_size=8,
+                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+
+    layer_2 = conv_to_fc(layer_1)
+    return activ(linear(layer_2, name + 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
+
+
+def simple_fc(scalars, name='sca', n_dim=128):
     activ = tf.nn.relu
     layer_1 = activ(
         linear(scalars, name + '1', n_hidden=n_dim, init_scale=np.sqrt(2)))
-    layer_2 = activ(
-        linear(layer_1, name + '2', n_hidden=n_dim, init_scale=np.sqrt(2)))
-    return activ(linear(layer_2, name + '3', n_hidden=n_dim, init_scale=np.sqrt(2)))
+
+    return activ(linear(layer_1, name + '3', n_hidden=n_dim, init_scale=np.sqrt(2)))
 
 
 class DFPPolicy(BasePolicy):
@@ -68,15 +76,15 @@ class DFPPolicy(BasePolicy):
         with tf.variable_scope('model', reuse=reuse):
             with tf.variable_scope('img_cnn', reuse=reuse):
                 # CNN提取棋盘特征
-                extracted_img = simple_cnn(self.processed_obs)
+                extracted_img = img_cnn(self.processed_obs)
                 extracted_img = tf.layers.flatten(extracted_img)
             with tf.variable_scope('gm_cnn', reuse=reuse):
                 # CNN提取goalmap特征
-                extracted_gm = simple_cnn(self.processed_gm, name='gm')
+                extracted_gm = gm_cnn(self.processed_gm)
                 extracted_gm = tf.layers.flatten(extracted_gm)
             with tf.variable_scope('sca_fc', reuse=reuse):
                 # 标量特征
-                extracted_sca = simple_fc(self.processed_sca, n_dim=128)
+                extracted_sca = simple_fc(self.processed_sca)
                 extracted_sca = tf.layers.flatten(extracted_sca)
             with tf.variable_scope('mea_fc', reuse=reuse):
                 # 衡量值特征
@@ -84,7 +92,7 @@ class DFPPolicy(BasePolicy):
                 extracted_mea = tf.layers.flatten(extracted_mea)
             with tf.variable_scope('goal_fc', reuse=reuse):
                 # goal特征
-                extracted_goal = simple_fc(self.processed_goal, name='goal', n_dim=128)
+                extracted_goal = simple_fc(self.processed_goal, name='goal')
                 extracted_goal = tf.layers.flatten(extracted_goal)
 
             with tf.variable_scope('concat', reuse=reuse):
@@ -96,8 +104,10 @@ class DFPPolicy(BasePolicy):
 
             with tf.variable_scope('exp_fc', reuse=reuse):
                 # expectation_stream
+                expectation_stream_prev = activ(linear(
+                    extracted_input, 'exp_prev', n_hidden=256, init_scale=np.sqrt(2)))
                 expectation_stream = activ(linear(
-                    extracted_input, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                    expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             if pgn:
                 print()
@@ -154,12 +164,15 @@ class DFPPolicy(BasePolicy):
                 print("Pure DFP...")
                 print()
 
+                action_prev = [None] * 4
                 action_stream = [None] * 4
 
                 with tf.variable_scope('action_fc', reuse=reuse):
                     for i in range(1, 5):
+                        action_prev[i - 1] = activ(linear(
+                            extracted_input, 'act_prev' + str(i), n_hidden=256, init_scale=np.sqrt(2)))
                         action_stream[i - 1] = activ(linear(
-                            extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                            action_prev[i - 1], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             # action_sum = action_stream[0]
             n_actions = len(action_stream)

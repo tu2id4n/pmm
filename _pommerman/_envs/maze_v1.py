@@ -195,7 +195,7 @@ class Pomme(v0.Pomme):
 
         self.interval += 1
         # 如果达成目标则重新设置目标
-        if self.achive:  #or (self.interval + 1) % max_interval == 0:
+        if self.achive:  # or (self.interval + 1) % max_interval == 0:
             if self.achive:
                 reach_goals_pre += 1
             self.interval = 0
@@ -280,11 +280,12 @@ class Pomme(v0.Pomme):
     def make_board(self):
         self._board = env_utils.make_board(self._board_size, self._num_rigid,
                                            self._num_wood, len(self._agents))
-        # self._board = env_utils.generate_item(self._board, (1, 1), self._board_size)
+        self.generate_item((1, 1))
 
     def generate_item(self, position):
-        self._board = env_utils.generate_item(self._board, position, self._board_size)
-        self.achive = False
+        for i in range(1):
+            self._board = env_utils.generate_item(self._board, position, self._board_size)
+            self.achive = False
 
     def make_items(self):
         self._items = env_utils.make_items(self._board, self._num_items)
