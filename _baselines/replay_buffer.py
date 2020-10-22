@@ -3,6 +3,7 @@ import numpy as np
 
 _hindsight = False
 
+
 class ReplayBuffer(object):
     def __init__(self, buffer_size, time_spans, batch_size):
         self.storage = []
@@ -99,11 +100,10 @@ class ReplayBuffer(object):
             storage = self.storage
         _len = len(storage) - 1 - self.time_spans[-1]
         imgs, scas, meas, goals, gms, actions, futures = [], [], [], [], [], [], []
-        terminal = True
-        idx = random.randint(0, _len)
+        # terminal = True
+        # idx = random.randint(0, _len)
         for i in range(self.batch_size):
-            if terminal:
-                idx = random.randint(0, _len)
+            idx = random.randint(0, _len)
 
             data = storage[idx]
             img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
@@ -116,13 +116,6 @@ class ReplayBuffer(object):
             future, terminal = self.compute_future(idx=idx, storage=storage)
             futures.append(future)
 
-            # 获得连续的经验.
-            idx += 1
-
-            # 如果idx超出界限, 则需要重选idx.
-            if idx > _len:
-                terminal = True
-
         return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
                np.array(actions), np.array(futures)
 
@@ -132,46 +125,27 @@ class ReplayBuffer(object):
         j = idx
         terminal = False
         while j - idx <= self.time_spans[-1]:
-            img, sca, mea, goal, gm, action, rew, done, win, \
-            t_img, t_sca, t_mea, t_goal, t_gm = storage[j]
+            _, _, j_mea, _, _, _, _, done, _, \
+            _, _, _, _, _ = storage[j]
             if done:  # 代表结束
                 terminal = True
-                terminal_mea = mea
+                terminal_mea = j_mea
 
             if (j - idx) in self.time_spans:  # 如果在 timespans 内
                 if terminal:
                     diff_mea = terminal_mea - cur_mea
                 else:
-                    diff_mea = mea - cur_mea
+                    diff_mea = j_mea - cur_mea
                 # 设置为贴近 1
+                # print('diff_mea:', diff_mea)
                 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-                diff_mea[0] = (diff_mea[0] + 1) / 2  # woods↑
-                diff_mea[1] = (diff_mea[1] + 1) / 2  # items↑
-                diff_mea[2] = (diff_mea[2] + 1) / 2  # ammo_used↑
-                diff_mea[3] = (diff_mea[3] + 1) / 2  # frags↑
-                diff_mea[4] = (diff_mea[4] + 1) / 2  # is_dead↑
-                diff_mea[5] = (diff_mea[5] + 1) / 2  # reach_goals↑
-                diff_mea[6] = (diff_mea[6] + 1) / 2  # imove_counts↑
+                # diff_mea[0] = (diff_mea[0] + 1) * 10  # woods↑
+                # diff_mea[1] = (diff_mea[1] + 1) * 10  # items↑
+                # diff_mea[2] = (diff_mea[2] + 1) * 10  # ammo_used↑
+                # diff_mea[3] = (diff_mea[3] + 1) * 10  # frags↑
+                # diff_mea[4] = (diff_mea[4] + 1) * 10  # is_dead↑
+                # diff_mea[5] = (diff_mea[5] + 1) * 100  # reach_goals↑
+                # diff_mea[6] = (diff_mea[6] + 1) * 10  # imove_counts↑
                 future.extend(diff_mea)
             j += 1
         return np.array(future), terminal
-
-    def rand_sample(self):
-        idxes = [random.randint(0, len(self.storage) - 1 - self.time_spans[-1])
-                 for _ in range(self.batch_size)]
-        imgs, scas, meas, goals, gms, actions, futures = [], [], [], [], [], [], []
-
-        for i in idxes:
-            data = self.storage[i]
-            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
-            imgs.append(img)
-            scas.append(sca)
-            meas.append(mea)
-            goals.append(goal)
-            gms.append(gm)
-            actions.append(action)
-            future, _ = self.compute_future(idx=i)
-            futures.append(future)
-
-        return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
-               np.array(actions), np.array(futures)

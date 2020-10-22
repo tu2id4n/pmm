@@ -19,14 +19,16 @@ from _common import featurize, model_utils
 from .replay_buffer import ReplayBuffer
 from stable_baselines.common.policies import ActorCriticPolicy
 
-_time_span = [1, 2, 3, 4, 5, 10, ]
+_time_span = [1, 2, 4, 8, 16]
 _exploration_final_eps = 0.2
 _exploration_fraction = 0.05
-_learning_starts = 5000
-_batch_size = 128
+_learning_starts = 10000
+_batch_size = 64
 _n_actions = 4
 _pgn = False
-_gamma = 0.8
+_gamma = 0.99
+_update_eps = 1
+_num_timestep = 1e6
 
 
 class DFP(BaseRLModel):
@@ -74,9 +76,9 @@ class DFP(BaseRLModel):
         self.goalmap_space = featurize.get_goalmap_space()
         self.n_actions = _n_actions
         self.time_spans = time_spans
-        self.future_len = len(self.time_spans)
+        self.time_len = len(self.time_spans)
         self.meas_size = self.meas_space.shape[0]
-        self.future_size = self.future_len * self.meas_size
+        self.future_size = self.time_len * self.meas_size
 
         if _init_setup_model:
             self.setup_model()
@@ -110,7 +112,7 @@ class DFP(BaseRLModel):
                 with tf.variable_scope("loss", reuse=False):
                     self.targets_ph = tf.placeholder(tf.float32, [_n_actions, None, self.future_size],
                                                      name="targets")
-                    mse_error = train_model.mse_loss(self.targets_ph)
+                    mse_error, self.fs = train_model.mse_loss(self.targets_ph)
                     self.mse = mse_error
                     self.loss = tf.reduce_mean(mse_error)
                     tf.summary.scalar('loss', self.loss)
@@ -120,7 +122,13 @@ class DFP(BaseRLModel):
 
                     grads = tf.gradients(self.loss, self.params)
                     grads = list(zip(grads, self.params))
-                    optimizer = tf.train.AdamOptimizer(learning_rate=self.learning_rate)
+
+                    self.tf_step = tf.Variable(0, trainable=False)
+                    self.add_global = self.tf_step.assign_add(1)
+                    self.tf_learning_rate = tf.train.exponential_decay(self.learning_rate, self.tf_step,
+                                                                       _num_timestep, 0.3, staircase=True)
+                    optimizer = tf.train.AdamOptimizer(
+                        beta1=0.95, epsilon=1e-4, learning_rate=self.tf_learning_rate)
                     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
                     self._train = optimizer.apply_gradients(grads)
 
@@ -129,9 +137,7 @@ class DFP(BaseRLModel):
                 self.train_model = train_model
                 self.summay = tf.summary.merge_all()
 
-                # print('---------')
                 # print([i.name for i in tf.global_variables()])
-                # print('---------')
                 # print([i.name for i in tf.local_variables()])
 
             #  输出计算图
@@ -174,7 +180,7 @@ class DFP(BaseRLModel):
                         break
 
                 # update_eps = self.exploration.value(self.num_timesteps)
-                update_eps = 0.2
+                update_eps = _update_eps
 
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
@@ -186,8 +192,13 @@ class DFP(BaseRLModel):
                 self.replay_buffer.add(obs[0], action[0], rew[0], done[0], terminal_obs[0], win[0])
                 obs = new_obs
                 if writer is not None:
-                    summary_eps = tf.Summary(value=[tf.Summary.Value(tag='update_eps', simple_value=update_eps)])
+                    lr = self.sess.run(self.tf_learning_rate) * 1e4
+                    summary_eps = tf.Summary(value=[tf.Summary.Value(
+                        tag='update_eps', simple_value=update_eps)])
+                    summary_lr = tf.Summary(value=[tf.Summary.Value(
+                        tag='learning_rate', simple_value=lr)])
                     writer.add_summary(summary_eps, self.num_timesteps)
+                    writer.add_summary(summary_lr, self.num_timesteps)
 
                     self.episode_reward = total_episode_reward_logger(self.episode_reward,
                                                                       rew.reshape((self.n_envs, 1)),
@@ -208,6 +219,7 @@ class DFP(BaseRLModel):
                         # print("Training ...")
                         target_futures = self.act_model.get_futures(imgs, scas, meas, goals, gms)
                         targets = self.get_targets(actions, _futures, target_futures)
+
                         # np_mse = []
                         # for i in range(self.action_space.n):
                         #     mse = target_futures[i] - targets[i]
@@ -221,7 +233,16 @@ class DFP(BaseRLModel):
                                   self.targets_ph: targets, self.train_model.gm_ph: gms,
                                   }
 
-                        summary, loss, _, mse = self.sess.run([self.summay, self.loss, self._train, self.mse], td_map)
+                        summary, loss, _, mse, fs = self.sess.run([
+                            self.summay, self.loss, self._train, self.mse, self.fs], td_map)
+                        self.sess.run(self.add_global)
+                        # print()
+                        # for i in range(4):
+                        #     print('act', i+1)
+                        #     print(targets[i])
+                        #     print(fs[i])
+                        # print()
+
                     writer.add_summary(summary, self.num_timesteps)
                     # print(self.sess.run(self.params[9]))
 
@@ -232,21 +253,17 @@ class DFP(BaseRLModel):
 
                 self.num_timesteps += 1
 
-    def convert_futures(self, futures):
-        return futures.swapaxes(0, 1)
-
     def make_action(self, goal, futures, update_eps=0, n_actions=6):
-        goals = np.tile(goal, self.future_len)
+        goals = np.tile(goal, self.time_len)
         goals = np.array(goals, dtype=np.float32)
         m = self.meas_size
 
         # 衰减
-        for t in range(self.future_len):
+        for t in range(self.time_len):
             ts = _time_span[t] - 1
             gamma = _gamma ** ts
             for i in range(m * t, m * (t + 1)):
                 goals[i] *= gamma
-        # print('goals:', goals)
         actions = []
         if n_actions == 4:
             if random.random() < update_eps:
@@ -254,7 +271,6 @@ class DFP(BaseRLModel):
 
             for f in futures:
                 actions.append(goals.dot(f))
-
             return np.argmax(np.array(actions)) + 1
         else:
             if random.random() < update_eps:
@@ -263,6 +279,19 @@ class DFP(BaseRLModel):
                 actions.append(goals.dot(f))
 
             return np.argmax(np.array(actions))
+
+    def predict(self, obs):
+        obs = np.array(obs).reshape(1, -1)
+        futures = self.act_model.step(obs)
+        futures = self.convert_futures(futures)
+        # for i in range(len(futures[0])):
+        #     print("act", i+1, futures[0][i])
+        # print()
+        action = self.make_action(obs[0][3], futures[0], 0, n_actions=_n_actions)
+        return action
+
+    def convert_futures(self, futures):
+        return futures.swapaxes(0, 1)
 
     def get_targets(self, actions, futures, _target_futures):
         target_futures = copy.deepcopy(_target_futures)
@@ -273,17 +302,7 @@ class DFP(BaseRLModel):
                 target_futures[actions[i]][i] = futures[i]
         # 将小于0的置为0
         # target_futures = np.where(target_futures > 0, target_futures, 0)
-
         return target_futures
-
-    def predict(self, obs):
-        obs = np.array(obs).reshape(1, -1)
-        futures = self.act_model.step(obs)
-        futures = self.convert_futures(futures)
-        print(futures.shape)
-        print(futures[0])
-        action = self.make_action(obs[0][3], futures[0], 0, n_actions=_n_actions)
-        return action
 
     def save(self, save_path, cloudpickle=False):
         print()
@@ -309,7 +328,7 @@ class DFP(BaseRLModel):
             "goalmap_space": self.goalmap_space,
             "n_actions": self.n_actions,
             "time_spans": self.time_spans,
-            "future_len": self.future_len,
+            "future_len": self.time_len,
             "meas_size": self.meas_size,
             "future_size": self.future_size,
             "n_envs": self.n_envs,

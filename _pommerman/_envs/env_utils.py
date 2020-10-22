@@ -23,7 +23,7 @@ agent0 = constants.Item.Agent0.value
 agent1 = constants.Item.Agent1.value
 agent2 = constants.Item.Agent2.value
 agent3 = constants.Item.Agent3.value
-
+_num_rigid = 50
 
 def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
@@ -143,7 +143,7 @@ def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
         #         num_wood -= 4
 
         # Lay down the rigid walls.
-        num_rigid = 50
+        num_rigid = _num_rigid
         while num_rigid > 0:
             num_rigid = lay_wall(constants.Item.Rigid.value, num_rigid,
                                  coordinates, board)

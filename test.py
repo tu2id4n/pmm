@@ -7,11 +7,11 @@ from _baselines import DFP
 import random
 import numpy as np
 
-_test = True
+_test = True  # False to example
+_model_path = "model/test_21M.zip"
 _env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
-_model_path = "model/maze_v0_dfp_1M.zip"
-# 8dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-_goal = [0, 0, 0, 0, -1, 1, -1]
+# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
+_goal = [0, 0.5, 0, 0, -1, 0.5, -0.1]
 _train_idx = 0
 _episode = 1000
 _flag = False
@@ -41,10 +41,10 @@ class Test:
                 all_actions = self.env.act(obs)
                 featurize_obs = featurize.featurize(obs[self.train_idx])
                 train_act = self.model.predict(featurize_obs)
-                print("train_act:", train_act)
 
                 all_actions[self.train_idx] = train_act
                 obs, rewards, done, info = self.env.step(all_actions)
+                # print("train_act:", train_act)
                 self.env.render()
 
                 if first_render:  # 第一次 render env 时将当前的测试注册.
@@ -53,7 +53,7 @@ class Test:
                 if self.flag:
                     self.flag = False
                     done = True
-
+            print("reward:", rewards[0])
             print(info)
             print()
 

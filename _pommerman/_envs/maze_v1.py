@@ -9,7 +9,7 @@ import copy
 import random
 from . import env_utils
 
-max_setps = 3000
+max_setps = 800
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 meas_size = 7
 max_interval = 100
@@ -195,7 +195,7 @@ class Pomme(v0.Pomme):
 
         self.interval += 1
         # 如果达成目标则重新设置目标
-        if self.achive or (self.interval + 1) % max_interval == 0:
+        if self.achive:  #or (self.interval + 1) % max_interval == 0:
             if self.achive:
                 reach_goals_pre += 1
             self.interval = 0

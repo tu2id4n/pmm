@@ -13,7 +13,7 @@ import random
 
 # 设置训练的数据
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-train_goal = [1, 1, -1, 1, -1, 1, -1]
+train_goal = [0, 0.5, -0, 0, -10, 0.5, -0.1]
 train_idx = 0
 teammates = [train_idx, (train_idx + 2) % 4]
 teammates.sort()
@@ -34,11 +34,7 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 whole_obs = env.get_observations()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
 
-                if random.random() < update_eps:  # 使用 simple agent 进行探索
-                    all_actions[train_idx] = np.array([random.randint(0, 5)])
-                else:
-                    # 使用 random 进行探索
-                    #     print("Fault Act!")
+                if random.random() > update_eps:  # 使用 simple agent 进行探索
                     all_actions[train_idx] = train_act  # 当前训练的 agent 的动作也加进来
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组

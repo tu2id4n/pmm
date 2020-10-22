@@ -75,12 +75,13 @@ def featurize(obs):
     meas_fea = measurements_extra(meas)
 
     # 提取 goal
-    goal_fea = np.array(obs['goal'])
+    goal_fea = np.array(obs['goal'], dtype=np.float32)
 
     # 提取 goalmap
-    goalmap_fea = goalmap_extra(img)
+    gm_fea = goalmap_extra(img)
 
-    return img_fea, scas_fea, meas_fea, goal_fea, goalmap_fea  # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
+    return img_fea, scas_fea, meas_fea, goal_fea, gm_fea
+    # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
 
 
 # 状态抽象
@@ -115,7 +116,7 @@ def img_extra(img):
     maps.append(bomb_map / 13)
     maps.append(move_direction / 4)
 
-    return np.stack(maps, axis=2)  # 11 * 11 * 10
+    return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 10
 
 
 # goalmap提取
@@ -125,7 +126,7 @@ def goalmap_extra(img):
     for i in [passage, rigid, img['idx'], extra_bomb]:
         maps.append(board == i)
 
-    return np.stack(maps, axis=2)  # 11 * 11 * 4
+    return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 4
 
 
 # 标量提取
@@ -151,7 +152,8 @@ def scalars_extra(scas):
         a = 1 if aliv in scas['alives'] else 0
         maps.append(a)
 
-    return np.array(maps)  # 7 -> [steps, ammo, strength, kick, teammate, enemy1, enemy2]
+    return np.array(maps, dtype=np.float32)
+    # 7 -> [steps, ammo, strength, kick, teammate, enemy1, enemy2]
 
 
 # 衡量指标提取
@@ -170,7 +172,7 @@ def measurements_extra(meas):
     maps.append(meas['reach_goals'])
     # maps.append(meas['step_counts'])
     maps.append(meas['imove_counts'])
-    return np.array(maps)
+    return np.array(maps, dtype=np.float32)
 
 
 # 提取特定位置 position_bomb_map
