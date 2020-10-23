@@ -18,28 +18,15 @@ from _policies import DFPPolicy
 from _common import featurize, model_utils
 from .replay_buffer import ReplayBuffer
 from stable_baselines.common.policies import ActorCriticPolicy
-
-_buffer_size = 20000
-_learning_starts = 10000
-
-_time_span = [1, 2, 4, 8, 16, 32]
-_exploration_final_eps = 0.2
-_exploration_fraction = 0.05
-_update_eps = 0.2
-_n_actions = 4
-_pgn = False
-_gamma = 0.99
-
-_batch_size = 128
-_lr_decay_step = 1e5
-_decay_rate = 0.3
+from _common import _constants
 
 
 class DFP(BaseRLModel):
-    def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=_buffer_size,
-                 learning_starts=_learning_starts, time_spans=_time_span,
-                 exploration_fraction=_exploration_fraction, exploration_final_eps=_exploration_final_eps,
-                 batch_size=_batch_size, n_steps=128, nminibatches=4, verbose=0,
+    def __init__(self, policy=DFPPolicy, env=None, gamma=0.99, learning_rate=5e-4, buffer_size=_constants.buffer_size,
+                 learning_starts=_constants.learning_starts, time_spans=_constants.time_span,
+                 exploration_fraction=_constants.exploration_fraction,
+                 exploration_final_eps=_constants.exploration_final_eps,
+                 batch_size=_constants.batch_size, n_steps=128, nminibatches=4, verbose=0,
                  tensorboard_log=None, full_tensorboard_log=False, _init_setup_model=True,
                  policy_kwargs=None):
 
@@ -78,7 +65,7 @@ class DFP(BaseRLModel):
         self.goal_space = featurize.get_goal_space()
         self.action_space = featurize.get_action_space()
         self.goalmap_space = featurize.get_goalmap_space()
-        self.n_actions = _n_actions
+        self.n_actions = _constants.n_actions
         self.time_spans = time_spans
         self.time_len = len(self.time_spans)
         self.meas_size = self.meas_space.shape[0]
@@ -101,7 +88,7 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step, pgn=_pgn,
+                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step,
                                         pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
@@ -109,12 +96,12 @@ class DFP(BaseRLModel):
                                        custom_getter=tf_util.outer_scope_getter("train_model")):
                     train_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space,
                                               self.goal_space, self.action_space, self.goalmap_space,
-                                              self.n_envs // self.nminibatches, self.n_steps, n_batch_train, pgn=_pgn,
+                                              self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
                                               pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                               **self.policy_kwargs)
 
                 with tf.variable_scope("loss", reuse=False):
-                    self.targets_ph = tf.placeholder(tf.float32, [_n_actions, None, self.future_size],
+                    self.targets_ph = tf.placeholder(tf.float32, [_constants.n_actions, None, self.future_size],
                                                      name="targets")
                     mse_error, self.fs = train_model.mse_loss(self.targets_ph)
                     self.mse = mse_error
@@ -130,7 +117,8 @@ class DFP(BaseRLModel):
                     self.tf_step = tf.Variable(0, trainable=False)
                     self.add_global = self.tf_step.assign_add(1)
                     self.tf_learning_rate = tf.train.exponential_decay(self.learning_rate, self.tf_step,
-                                                                       _lr_decay_step, _decay_rate, staircase=True)
+                                                                       _constants.lr_decay_step, _constants.decay_rate,
+                                                                       staircase=True)
                     optimizer = tf.train.AdamOptimizer(
                         beta1=0.95, epsilon=1e-4, learning_rate=self.tf_learning_rate)
                     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
@@ -154,18 +142,18 @@ class DFP(BaseRLModel):
               save_interval=10000, save_path=None):
 
         print('-------------------------------')
-        print('| exploration_final_eps =', _exploration_final_eps)
-        print('| exploration_fraction =', _exploration_fraction)
-        print('| update_eps =', _update_eps)
-        print('| buffer_size =', _buffer_size)
-        print('| learning_starts =', _learning_starts)
-        print('| batch_size =', _batch_size)
-        print('| lr_decay_step =', _lr_decay_step)
-        print('| decay_rate =', _decay_rate)
-        print('| pgn =', _pgn)
-        print('| timp_span =', _time_span)
-        print('| n_actions =', _n_actions)
-        print('| gamma =', _gamma)
+        print('| exploration_final_eps =', _constants.exploration_final_eps)
+        print('| exploration_fraction =', _constants.exploration_fraction)
+        print('| update_eps =', _constants.update_eps)
+        print('| buffer_size =', _constants.buffer_size)
+        print('| learning_starts =', _constants.learning_starts)
+        print('| batch_size =', _constants.batch_size)
+        print('| lr_decay_step =', _constants.lr_decay_step)
+        print('| decay_rate =', _constants.decay_rate)
+        print('| pgn =', _constants.pgn)
+        print('| timp_span =', _constants.time_span)
+        print('| n_actions =', _constants.n_actions)
+        print('| gamma =', _constants.gamma)
         print("| Save Path =", save_path)
         print("| Save Interval =", save_interval / 100000, "M")
         print('-------------------------------')
@@ -183,11 +171,9 @@ class DFP(BaseRLModel):
                                               final_p=self.exploration_final_eps)
 
             obs = self.env.reset()
-            # (imgs, scas, meas, goal, gms)  ==> # [(11, 11, 10), (6, ), (4, ), (4, ), (11, 11, 3)]
-            # reset = True  #
+
             self.episode_reward = np.zeros((1,))
             self.wins = np.zeros((1,))
-
             for _ in range(total_timesteps):
                 if callback is not None:
                     # Only stop training if return value is False, not when it is None. This is for backwards
@@ -196,14 +182,15 @@ class DFP(BaseRLModel):
                         break
 
                 # update_eps = self.exploration.value(self.num_timesteps)
-                update_eps = _update_eps
+                update_eps = _constants.update_eps
 
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
-                action = self.make_action(obs[0][3], futures[0], n_actions=_n_actions)  # 这里没有探索
-                action = np.array([action])
-                new_obs, rew, done, terminal_obs, win, real_act = self.env.step([(action, update_eps)])
+                train_act = self.make_action(obs[0][3], futures[0], n_actions=_constants.n_actions)
+                train_act = np.array([train_act])
+                # 这里使用探索
+                new_obs, rew, done, terminal_obs, win, real_act = self.env.step([(train_act, update_eps)])
                 self.replay_buffer.add(obs[0], real_act[0], rew[0], done[0], terminal_obs[0], win[0])
                 obs = new_obs
                 if writer is not None:
@@ -254,15 +241,15 @@ class DFP(BaseRLModel):
 
                 self.num_timesteps += 1
 
-    def make_action(self, goal, futures, update_eps=0, n_actions=6):
+    def make_action(self, goal, futures, n_actions=6):
         goals = np.tile(goal, self.time_len)
         goals = np.array(goals, dtype=np.float32)
         m = self.meas_size
 
         # 衰减
         for t in range(self.time_len):
-            ts = _time_span[t] - 1
-            gamma = _gamma ** ts
+            ts = _constants.time_span[t] - 1
+            gamma = _constants.gamma ** ts
             for i in range(m * t, m * (t + 1)):
                 goals[i] *= gamma
         actions = []
@@ -273,6 +260,7 @@ class DFP(BaseRLModel):
             return np.argmax(np.array(actions)) + 1
         else:
             # WASD Stop Bomb
+            print("Fault make_action...")
             for f in futures:
                 actions.append(goals.dot(f))
 
@@ -285,7 +273,7 @@ class DFP(BaseRLModel):
         # for i in range(len(futures[0])):
         #     print("act", i+1, futures[0][i])
         # print()
-        action = self.make_action(obs[0][3], futures[0], 0, n_actions=_n_actions)
+        action = self.make_action(obs[0][3], futures[0], n_actions=_constants.n_actions)
         return action
 
     def convert_futures(self, futures):
@@ -294,9 +282,10 @@ class DFP(BaseRLModel):
     def get_targets(self, actions, futures, _target_futures):
         target_futures = copy.deepcopy(_target_futures)
         for i in range(self.batch_size):
-            if _n_actions == 4:
-                target_futures[actions[i] - 1][i] = futures[i]
+            if _constants.n_actions == 4:
+                target_futures[actions[i] - 1][i] = copy.deepcopy(futures[i])
             else:
+                print("Fault target_futures...")
                 target_futures[actions[i]][i] = futures[i]
         # 将小于0的置为0
         # target_futures = np.where(target_futures > 0, target_futures, 0)
@@ -358,7 +347,7 @@ class DFP(BaseRLModel):
         model.setup_model()
         model.load_parameters(params)
 
-        if _pgn:  # ntc.
+        if _constants.pgn:  # ntc.
             print()
             print("Using PGN Load...")
             prev_params = model.get_parameters()

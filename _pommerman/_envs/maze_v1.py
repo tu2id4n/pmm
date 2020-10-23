@@ -9,7 +9,7 @@ import copy
 import random
 from . import env_utils
 
-max_setps = 800
+max_setps = 3200
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 meas_size = 7
 max_interval = 100

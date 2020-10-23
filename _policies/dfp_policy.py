@@ -4,8 +4,7 @@ from stable_baselines.common.policies import BasePolicy
 from stable_baselines.common.input import observation_input
 from stable_baselines.a2c.utils import ortho_init
 from stable_baselines.common import tf_util
-
-_initializer = tf.glorot_normal_initializer()
+from _common import _constants
 
 
 def img_cnn(scaled_images, name='img', **kwargs):
@@ -39,7 +38,7 @@ def simple_fc(scalars, name='sca', n_dim=128):
 
 class DFPPolicy(BasePolicy):
     def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, gm_space, n_env, n_steps, n_batch,
-                 reuse=False, scale=False, pgn_params=None, pgn=False,
+                 reuse=False, scale=False, pgn_params=None,
                  obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, gm_phs=None, future_size=6):
         super(DFPPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse, scale=scale,
                                         obs_phs=obs_phs)
@@ -109,54 +108,55 @@ class DFPPolicy(BasePolicy):
                 expectation_stream = activ(linear(
                     expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
-            if pgn:
+            if _constants.pgn:
                 print()
                 print("PGN and DFP...")
                 print()
                 if pgn_params:
                     print("PGN Loading...")
-                    action_stream = [None] * 6
+                    action_stream = [None] * _constants.n_actions
                     with tf.variable_scope('action_fc', reuse=reuse):
                         action_stream[0] = activ(linear(
                             extracted_input, 'act' + str(0), n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
                     with tf.variable_scope('action_fc', reuse=reuse):
-                        action_stream[5] = activ(linear(
-                            extracted_input, 'act' + str(5), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                        action_stream[_constants.n_actions - 1] = activ(linear(
+                            extracted_input, 'act' + str(_constants.n_actions - 1),
+                            n_hidden=self.future_size, init_scale=np.sqrt(2)))
                     len_params = len(pgn_params)
                     prev_stream = [[None] * self.n_actions] * len_params
                     u_stream = [[None] * self.n_actions] * len_params
                     for c in range(len_params):  # col, row
                         with tf.variable_scope('prev_fc' + str(c), reuse=reuse):
-                            for r in range(1, 5):
+                            for r in range(1, _constants.n_actions - 1):
                                 scope = 'action_fc/act' + str(r)
                                 prev_stream[c][r] = activ(pgn_linear(extracted_input, scope,
                                                                      ww=pgn_params[c][scope + '/w'],
                                                                      bb=pgn_params[c][scope + '/b']))
 
                         with tf.variable_scope('u_fc' + str(c), reuse=reuse):
-                            for r in range(1, 5):
+                            for r in range(1, _constants.n_actions - 1):
                                 scope = 'act' + str(r)
                                 u_stream[c][r] = activ(linear(
                                     prev_stream[c][r], scope, n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
                     usum_stream = [None] * self.n_actions
-                    for r in range(1, 5):
+                    for r in range(1, _constants.n_actions - 1):
                         usum_stream[r] = u_stream[0][r]
                         for c in range(1, len(u_stream)):
                             usum_stream[r] = tf.add(usum_stream[r], u_stream[c][r])
 
                     with tf.variable_scope('action_fc', reuse=reuse):
-                        for i in range(1, 5):
+                        for i in range(1, _constants.n_actions - 1):
                             action_stream[i] = linear(
                                 extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
                             action_stream[i] = activ(tf.add(action_stream[i], usum_stream[i]))
                 else:
                     print("DFP Loading...")
 
-                    action_stream = [None] * 6
+                    action_stream = [None] * _constants.n_actions
                     with tf.variable_scope('action_fc', reuse=reuse):
-                        for i in range(6):
+                        for i in range(_constants.n_actions):
                             action_stream[i - 1] = activ(linear(
                                 extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
             else:
@@ -164,11 +164,11 @@ class DFPPolicy(BasePolicy):
                 print("Pure DFP...")
                 print()
 
-                action_prev = [None] * 4
-                action_stream = [None] * 4
+                action_prev = [None] * _constants.n_actions
+                action_stream = [None] * _constants.n_actions
 
                 with tf.variable_scope('action_fc', reuse=reuse):
-                    for i in range(1, 5):
+                    for i in range(1, _constants.n_actions + 1):
                         action_prev[i - 1] = activ(linear(
                             extracted_input, 'act_prev' + str(i), n_hidden=256, init_scale=np.sqrt(2)))
                         action_stream[i - 1] = activ(linear(
@@ -298,8 +298,7 @@ def conv(input_tensor, scope, *, n_filters, filter_size, stride,
     n_input = input_tensor.get_shape()[channel_ax].value
     wshape = [filter_height, filter_width, n_input, n_filters]
     with tf.variable_scope(scope):
-        # weight = tf.get_variable("w", wshape, initializer=ortho_init(init_scale))
-        weight = tf.get_variable("w", wshape, initializer=_initializer)
+        weight = tf.get_variable("w", wshape, initializer=_constants.conv_init)
         bias = tf.get_variable("b", bias_var_shape, initializer=tf.constant_initializer(0.0))
         if not one_dim_bias and data_format == 'NHWC':
             bias = tf.reshape(bias, bshape)
@@ -319,7 +318,7 @@ def linear(input_tensor, scope, n_hidden, *, init_scale=1.0, init_bias=0.0):
     """
     with tf.variable_scope(scope):
         n_input = input_tensor.get_shape()[1].value
-        weight = tf.get_variable("w", [n_input, n_hidden], initializer=_initializer)
+        weight = tf.get_variable("w", [n_input, n_hidden], initializer=_constants.linear_init)
         bias = tf.get_variable("b", [n_hidden], initializer=tf.constant_initializer(init_bias))
         return tf.matmul(input_tensor, weight) + bias
 

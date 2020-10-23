@@ -10,16 +10,7 @@ from stable_baselines.common.tile_images import tile_images
 from _common import featurize
 import numpy as np
 import random
-
-# 设置训练的数据
-# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-_train_goal = [0, 5, -0, 0, -10, 5, -0.1]
-_train_idx = 0
-_teammates = [_train_idx, (_train_idx + 2) % 4]
-_teammates.sort()
-_enemies = [(_train_idx + 1) % 4, (_train_idx + 3) % 4]
-_enemies.sort()
-_random_explore = True
+from _common import _constants
 
 
 def _worker(remote, parent_remote, env_fn_wrapper):
@@ -35,35 +26,37 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 whole_obs = env.get_observations()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
 
-                if random.random() < update_eps:
-                    if _random_explore:
+                if random.random() < update_eps:  # 使用探索
+                    if _constants.random_explore or \
+                            all_actions[_constants.train_idx] == 5 or all_actions[_constants.train_idx] == 0:
                         # 使用随机探索
-                        all_actions[_train_idx] = np.array([random.randint(1, 4)])
+                        all_actions[_constants.train_idx] = np.array(random.randint(1, 4))
                     # else: 使用 simple agent 进行探索
                 else:
                     # 使用网络输出动作
-                    all_actions[_train_idx] = train_act[0]
+                    print("Fault all_actions[_train_idx]...")
+                    all_actions[_constants.train_idx] = train_act[0]
 
-                real_act = all_actions[_train_idx]
+                real_act = all_actions[_constants.train_idx]
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
-                rew = whole_rew[_train_idx]  # 得到训练智能体的当前步的 reward
-                info['terminal_obs'] = featurize.featurize(whole_obs[_train_idx])  # 保存最后一帧
+                rew = whole_rew[_constants.train_idx]  # 得到训练智能体的当前步的 reward
+                info['terminal_obs'] = featurize.featurize(whole_obs[_constants.train_idx])  # 保存最后一帧
 
                 win = 0  # 输出胜率
                 if done:  # 如果结束, 重新开一把
                     if info['result'] == constants.Result.Win:
                         win = 1
-                    whole_obs = env.reset(train_idx=_train_idx, goal=_train_goal)  # 重新开一把
+                    whole_obs = env.reset(train_idx=_constants.train_idx, goal=_constants.train_goal)  # 重新开一把
 
-                obs = featurize.featurize(whole_obs[_train_idx])
+                obs = featurize.featurize(whole_obs[_constants.train_idx])
 
                 # 所以done对应的是下一个episode的开始
                 remote.send((obs, rew, done, info['terminal_obs'], win, real_act))
 
             elif cmd == 'reset':
-                whole_obs = env.reset(train_idx=_train_idx, goal=_train_goal)
-                obs = featurize.featurize(whole_obs[_train_idx])
+                whole_obs = env.reset(train_idx=_constants.train_idx, goal=_constants.train_goal)
+                obs = featurize.featurize(whole_obs[_constants.train_idx])
 
                 remote.send(obs)
 

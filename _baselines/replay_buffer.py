@@ -1,7 +1,17 @@
 import random
 import numpy as np
+from _common import _constants
 
-_hindsight = False
+_img = 0
+_sca = 1
+_mea = 2
+_goal = 3
+_gm = 4
+_done = 7
+_tmea = 11
+
+_idx_map = 2
+_goal_map = 3
 
 
 class ReplayBuffer(object):
@@ -15,7 +25,7 @@ class ReplayBuffer(object):
         self.K = 4
         self.her = 0
         self.her_storage = []
-        self.hindsight = _hindsight
+        self.hindsight = _constants.hindsight
         if self.hindsight:
             print()
             print("Using HindSight to collect trajectories...")
@@ -60,41 +70,41 @@ class ReplayBuffer(object):
                 # 将 f goal map 的 agent position 加入当前 goal map
                 new_gm = np.stack(d_gm, axis=2)
                 new_gm = np.stack(new_gm, axis=2)
-                new_gm[3] = np.logical_or(new_gm[3], new_fgm[2])
+                new_gm[_goal_map] = np.logical_or(new_gm[_goal_map], new_fgm[_idx_map])
                 new_gm = np.stack(new_gm, axis=2)
 
-                # 获取下一帧 dt goal map
+                # 获取下一帧 d_t_gm
                 new_tgm = np.stack(d_t_gm, axis=2)
                 new_tgm = np.stack(new_tgm, axis=2)
-                new_tgm[3] = np.logical_or(new_tgm[3], new_fgm[2])
+                new_tgm[_goal_map] = np.logical_or(new_tgm[_goal_map], new_fgm[_idx_map])
                 new_tgm = np.stack(new_tgm, axis=2)
 
-                # 获取新的衡量 d mea
-                # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-                d_mea[5] += achive_count
+                # 获取新的衡量 d_mea
+                d_mea[_constants.reach_goals] += achive_count
 
-                if np.logical_and(new_gm[3], new_tgm[2]).any():
+                # 如果下一步到达目标点
+                if np.logical_and(new_gm[_goal], new_tgm[_idx_map]).any():
                     achive_count += 1
 
-                d_t_mea[5] += achive_count
+                d_t_mea[_constants.reach_goals] += achive_count
                 data = (d_img, d_sca, d_mea, d_goal, new_gm, d_action, d_rew, False, d_win,
                         d_t_img, d_t_sca, d_t_mea, d_t_goal, new_tgm)
                 self.her_storage.append(data)
-                f_data[4] = new_tgm
+                f_data[_gm] = new_tgm
 
-            f_data[2][5] += achive_count
-            f_data[11][5] += achive_count
-            f_data[7] = True
+            f_data[_mea][_constants.reach_goals] += achive_count
+            f_data[_tmea][_constants.reach_goals] += achive_count
+            f_data[_done] = True
             self.her_storage.append(tuple(f_data))
 
             while len(self.her_storage) > self.maxsize:
-                self.her_storage.pop(0)
+                self.her_storage.pop(0)  # 弹出buffer第一位
 
     def sample(self):
         return self.seq_sample()
 
     def seq_sample(self):
-        if self.hindsight and random.random() < 0.2:
+        if self.hindsight and random.random() < _constants.her_pb:
             storage = self.her_storage
         else:
             storage = self.storage
@@ -138,7 +148,6 @@ class ReplayBuffer(object):
                     diff_mea = j_mea - cur_mea
                 # 设置为贴近 1
                 # print('diff_mea:', diff_mea)
-                # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
                 # diff_mea[0] = (diff_mea[0] + 1) * 10  # woods↑
                 # diff_mea[1] = (diff_mea[1] + 1) * 10  # items↑
                 # diff_mea[2] = (diff_mea[2] + 1) * 10  # ammo_used↑
@@ -147,5 +156,6 @@ class ReplayBuffer(object):
                 # diff_mea[5] = (diff_mea[5] + 1) * 100  # reach_goals↑
                 # diff_mea[6] = (diff_mea[6] + 1) * 10  # imove_counts↑
                 future.extend(diff_mea)
+                # print(j-idx, diff_mea)
             j += 1
         return np.array(future), terminal
