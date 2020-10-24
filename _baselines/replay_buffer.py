@@ -62,6 +62,7 @@ class ReplayBuffer(object):
 
             f_index = 0
             achive_count = 0
+            print('-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-')
             for t in range(self.her_size):
                 cur_data = self.storage[st + t]
                 c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win, \
@@ -70,11 +71,13 @@ class ReplayBuffer(object):
                 # 获取新的衡量 d_mea
                 c_mea[_constants.reach_goals] += achive_count
 
+
                 if c_done:  # 如果本步结束
                     f_index += 1
                     achive_count = 0
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
+                    print('done', c_done, c_mea[_constants.reach_goals])
                     self.her_storage.append(data)
                 else:
                     # 获取f goalmap
@@ -96,9 +99,12 @@ class ReplayBuffer(object):
                     # 如果下一步到达目标点
                     if np.logical_and(og_gm[_goal], og_tgm[_idx_map]).any():
                         achive_count += 1
-
+                    if t == self.her_size - 1:
+                        # print('fix done')
+                        c_done = True
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
+                    print(c_done, c_mea[_constants.reach_goals])
                     self.her_storage.append(data)
 
             while len(self.her_storage) > self.maxsize:
