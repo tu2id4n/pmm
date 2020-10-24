@@ -29,7 +29,7 @@ def get_scas_space():
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(1,))
+    return spaces.Box(low=0, high=1, shape=(2,))
     # 7dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 
 
@@ -172,7 +172,7 @@ def measurements_extra(meas):
     # maps.append(meas['is_dead'])
 
     maps.append(meas['reach_goals'])
-    # maps.append(meas['imove_counts'])
+    maps.append(meas['imove_counts'])
     return np.array(maps, dtype=np.float32)
 
 

@@ -62,7 +62,6 @@ class ReplayBuffer(object):
 
             f_index = 0
             achive_count = 0
-            print('-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-')
             for t in range(self.her_size):
                 cur_data = self.storage[st + t]
                 c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win, \
@@ -71,13 +70,11 @@ class ReplayBuffer(object):
                 # 获取新的衡量 d_mea
                 c_mea[_constants.reach_goals] += achive_count
 
-
                 if c_done:  # 如果本步结束
                     f_index += 1
                     achive_count = 0
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
-                    print('done', c_done, c_mea[_constants.reach_goals])
                     self.her_storage.append(data)
                 else:
                     # 获取f goalmap
@@ -104,7 +101,6 @@ class ReplayBuffer(object):
                         c_done = True
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
-                    print(c_done, c_mea[_constants.reach_goals])
                     self.her_storage.append(data)
 
             while len(self.her_storage) > self.maxsize:
@@ -115,6 +111,7 @@ class ReplayBuffer(object):
 
     def seq_sample(self):
         if self.hindsight and random.random() < _constants.her_pb:
+            print('now her...')
             storage = self.her_storage
         else:
             storage = self.storage
@@ -127,6 +124,8 @@ class ReplayBuffer(object):
 
             data = storage[idx]
             img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
+            while done:
+                idx = random.randint(0, _len)
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
@@ -144,7 +143,6 @@ class ReplayBuffer(object):
         cur_mea = storage[idx][2]
         j = idx
         terminal = False
-        # print('~~~~~~~~~~~~~~~~~~~~~~')
         while j - idx <= self.time_spans[-1]:
             _, _, j_mea, _, _, _, _, done, _, \
             _, _, _, _, _ = storage[j]

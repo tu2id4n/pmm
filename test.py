@@ -8,8 +8,8 @@ import random
 import numpy as np
 from _common import _constants
 
-_test = False  # False to example
-_model_path = "model/test_150k.zip"
+_test = True  # False to example
+_model_path = "model/simple_50k.zip"
 _env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
 _episode = 1000
 _flag = False

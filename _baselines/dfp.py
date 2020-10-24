@@ -271,9 +271,9 @@ class DFP(BaseRLModel):
         obs = np.array(obs).reshape(1, -1)
         futures = self.act_model.step(obs)
         futures = self.convert_futures(futures)
-        # for i in range(len(futures[0])):
-        #     print("act", i+1, futures[0][i])
-        # print()
+        for i in range(len(futures[0])):
+            print("act", i+1, futures[0][i])
+        print()
         action = self.make_action(obs[0][3], futures[0], n_actions=_constants.n_actions)
         return action
 

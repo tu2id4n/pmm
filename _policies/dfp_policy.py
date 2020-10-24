@@ -103,12 +103,12 @@ class DFPPolicy(BasePolicy):
 
             activ = tf.nn.relu
 
-            with tf.variable_scope('exp_fc', reuse=reuse):
-                # expectation_stream
-                expectation_stream_prev = activ(linear(
-                    extracted_input, 'exp_prev', n_hidden=256, init_scale=np.sqrt(2)))
-                expectation_stream = activ(linear(
-                    expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
+            # with tf.variable_scope('exp_fc', reuse=reuse):
+            #     # expectation_stream
+            #     expectation_stream_prev = activ(linear(
+            #         extracted_input, 'exp_prev', n_hidden=256, init_scale=np.sqrt(2)))
+            #     expectation_stream = activ(linear(
+            #         expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             if _constants.pgn:
                 print()
@@ -175,17 +175,17 @@ class DFPPolicy(BasePolicy):
                             extracted_input, 'act_prev' + str(i), n_hidden=256, init_scale=np.sqrt(2)))
                         action_stream[i - 1] = activ(linear(
                             action_prev[i - 1], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+            # n_actions = len(action_stream)
             # 求 sum
-            action_sum = action_stream[0]
-            n_actions = len(action_stream)
-            for i in range(1, n_actions):
-                action_sum = tf.add(action_sum, action_stream[i])
-            # 求 mean
-            action_mean = tf.divide(action_sum, n_actions)
-
-            for i in range(n_actions):
-                action_stream[i] = tf.subtract(action_stream[i], action_mean)
-                action_stream[i] = tf.add(action_stream[i], expectation_stream)
+            # action_sum = action_stream[0]
+            # for i in range(1, n_actions):
+            #     action_sum = tf.add(action_sum, action_stream[i])
+            # # 求 mean
+            # action_mean = tf.divide(action_sum, n_actions)
+            #
+            # for i in range(n_actions):
+            #     # action_stream[i] = tf.subtract(action_stream[i], action_mean)
+            #     action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):
                 self._future_stream = tf.convert_to_tensor(action_stream)
