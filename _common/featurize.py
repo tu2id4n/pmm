@@ -29,7 +29,7 @@ def get_scas_space():
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(2,))
+    return spaces.Box(low=0, high=1, shape=(1,))
     # 7dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
 
 
@@ -79,7 +79,8 @@ def featurize(obs):
 
     # 提取 goalmap
     gm_fea = goalmap_extra(img)
-
+    # print('imove_counts', obs['imove_counts'])
+    # print('step_count', obs['step_count'])
     return img_fea, scas_fea, meas_fea, goal_fea, gm_fea
     # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
 
@@ -113,7 +114,7 @@ def img_extra(img):
     maps.append(np.logical_or(
         board == enemies_idx[0], board == enemies_idx[1]))
 
-    maps.append(bomb_map / 13)
+    maps.append(bomb_map / 10)
     maps.append(move_direction / 4)
 
     return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 10
@@ -171,7 +172,7 @@ def measurements_extra(meas):
     # maps.append(meas['is_dead'])
 
     maps.append(meas['reach_goals'])
-    maps.append(meas['imove_counts'])
+    # maps.append(meas['imove_counts'])
     return np.array(maps, dtype=np.float32)
 
 

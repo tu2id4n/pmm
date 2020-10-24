@@ -8,11 +8,13 @@ from pommerman.envs import v0
 import copy
 import random
 from . import env_utils
+from _common import _constants
 
-max_setps = 3200
+
+max_setps = _constants.max_setps
 # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-meas_size = 7
-max_interval = 100
+meas_size = _constants.meas_size
+max_interval = _constants.max_interval
 
 
 class Pomme(v0.Pomme):
@@ -75,28 +77,51 @@ class Pomme(v0.Pomme):
         self.observation_space = spaces.Box(
             np.array(min_obs), np.array(max_obs))
 
-    def get_observations(self, ):
+    def get_reset_observations(self, ):
         observations = super().get_observations()  # 已经获得新的self.observations了
 
         for obs in observations:
             obs['message'] = self._radio_from_agent[obs['teammate']]
 
         observation = observations[self.train_idx]
+        observation['my_bomb'] = []
+        observation['woods'] = 0
+        observation['frags'] = 0
+        observation['items'] = 0
+        observation['idx'] = observation['board'][observation['position']]
+        observation['ammo_used'] = 0
+        observation['goal'] = self.goal
+        observation['imove_counts'] = 0
+        observation['reach_goals'] = 0
+        observation['is_dead'] = False
 
-        # 如果没有obs_pre 就将obs_pre 设置为只当前相同.
-        if not self.observation_pre:
-            observation['my_bomb'] = []
-            observation['woods'] = 0
-            observation['frags'] = 0
-            observation['items'] = 0
-            observation['idx'] = observation['board'][observation['position']]
-            observation['ammo_used'] = 0
-            observation['goal'] = self.goal
-            observation['imove_counts'] = -1
-            observation['reach_goals'] = 0
-            observation['goal_positions'] = []
+        goal_board = observation['board']
+        goal_positons = []
+        for x in range(len(goal_board)):
+            for y in range(len(goal_board)):
+                if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
+                                          constants.Item.Kick.value]:
+                    goal_positons.append((x, y))
+        observation['goal_positions'] = goal_positons
 
-            self.observation_pre = observation
+        self.observation_pre = copy.deepcopy(observation)
+        observations[self.train_idx] = copy.deepcopy(observation)
+        self.observations = copy.deepcopy(observations)
+
+        return self.observations
+
+    def get_observations(self, ):
+        observations = super().get_observations()  # 已经获得新的self.observations了
+        for i in range(len(observations)):
+            observations[i]['step_count'] = self._step_count
+        for obs in observations:
+            obs['message'] = self._radio_from_agent[obs['teammate']]
+
+        observation = observations[self.train_idx]
+
+        if observation['step_count'] == self.observation_pre['step_count']:
+            self.observations[self.train_idx] = self.observation_pre
+            return self.observations
 
         observation['goal'] = self.observation_pre['goal']
 
@@ -221,9 +246,12 @@ class Pomme(v0.Pomme):
         self.observation_pre = copy.deepcopy(observation)
         observations[self.train_idx] = copy.deepcopy(observation)
         self.observations = copy.deepcopy(observations)
-        return observations
+
+        return self.observations
 
     def step(self, actions):
+        self._step_count += 1
+
         self._intended_actions = actions
 
         max_blast_strength = self._agent_view_size or 10
@@ -248,7 +276,6 @@ class Pomme(v0.Pomme):
             for agent in self._agents:
                 agent.episode_end(reward[agent.agent_id])
 
-        self._step_count += 1
         return obs, reward, done, info
 
     def reset(self, train_idx=0, goal=None):
@@ -275,7 +302,8 @@ class Pomme(v0.Pomme):
         self.goal = self.get_goal(goal)
         self.get_items = 0
         self.interval = 0
-        return self.get_observations()
+
+        return self.get_reset_observations()
 
     def make_board(self):
         self._board = env_utils.make_board(self._board_size, self._num_rigid,

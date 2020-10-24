@@ -21,8 +21,8 @@ class ReplayBuffer(object):
         self.time_spans = time_spans
         self.future_size = len(time_spans)
         self.batch_size = batch_size
-        self.her_size = 15
-        self.K = 4
+        self.her_size = _constants.her_size
+        self.K = _constants.her_K
         self.her = 0
         self.her_storage = []
         self.hindsight = _constants.hindsight
@@ -50,52 +50,56 @@ class ReplayBuffer(object):
             self.storage.pop(0)
 
         self.her += 1
-        if self.hindsight and self.her > self.her_size:
+        if self.hindsight and not dones and self.her > self.her_size:
             self.her = 0
             st = len(self.storage) - 1 - self.her_size
-            f_data = list(self.storage[st + self.her_size])
-            _, _, _, _, f_gm, _, _, _, _, _, _, _, _, _ = f_data
-            # 获取f goalmap
-            new_fgm = np.stack(f_gm, axis=2)
-            new_fgm = np.stack(new_fgm, axis=2)
+            f_data = []
+            for t in range(self.her_size + 1):
+                tmp_data = self.storage[st + t]
+                if tmp_data[_done]:
+                    f_data.append(tmp_data)
+            f_data.append(self.storage[st + self.her_size])
 
+            f_index = 0
             achive_count = 0
-            for t in range(0, self.her_size):
+            for t in range(self.her_size):
                 cur_data = self.storage[st + t]
-                d_img, d_sca, d_mea, d_goal, d_gm, d_action, d_rew, d_done, d_win, \
-                d_t_img, d_t_sca, d_t_mea, d_t_goal, d_t_gm = cur_data
-
-                # 获取d goalmap
-                # [passage, rigid, img['idx'], extra_bomb]
-                # 将 f goal map 的 agent position 加入当前 goal map
-                new_gm = np.stack(d_gm, axis=2)
-                new_gm = np.stack(new_gm, axis=2)
-                new_gm[_goal_map] = np.logical_or(new_gm[_goal_map], new_fgm[_idx_map])
-                new_gm = np.stack(new_gm, axis=2)
-
-                # 获取下一帧 d_t_gm
-                new_tgm = np.stack(d_t_gm, axis=2)
-                new_tgm = np.stack(new_tgm, axis=2)
-                new_tgm[_goal_map] = np.logical_or(new_tgm[_goal_map], new_fgm[_idx_map])
-                new_tgm = np.stack(new_tgm, axis=2)
+                c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win, \
+                c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm = cur_data
 
                 # 获取新的衡量 d_mea
-                d_mea[_constants.reach_goals] += achive_count
+                c_mea[_constants.reach_goals] += achive_count
 
-                # 如果下一步到达目标点
-                if np.logical_and(new_gm[_goal], new_tgm[_idx_map]).any():
-                    achive_count += 1
+                if c_done:  # 如果本步结束
+                    f_index += 1
+                    achive_count = 0
+                    data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
+                            c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
+                    self.her_storage.append(data)
+                else:
+                    # 获取f goalmap
+                    _, _, f_mea, _, f_gm, _, _, _, _, _, _, _, _, _ = f_data[f_index]
+                    og_fgm = np.stack(f_gm, axis=2)
+                    og_fgm = np.stack(og_fgm, axis=2)
+                    f_idx = og_fgm[_idx_map]
+                    # 获取current goalmap
+                    og_gm = np.stack(c_gm, axis=2)
+                    og_gm = np.stack(og_gm, axis=2)
+                    # [passage, rigid, img['idx'], extra_bomb]
+                    # 获取real_gm
+                    og_gm[_goal_map] = f_idx
+                    c_gm = np.stack(og_gm, axis=2)
+                    # 获取下一步
+                    og_tgm = np.stack(c_t_gm, axis=2)
+                    og_tgm = np.stack(og_tgm, axis=2)
 
-                d_t_mea[_constants.reach_goals] += achive_count
-                data = (d_img, d_sca, d_mea, d_goal, new_gm, d_action, d_rew, False, d_win,
-                        d_t_img, d_t_sca, d_t_mea, d_t_goal, new_tgm)
-                self.her_storage.append(data)
-                f_data[_gm] = new_tgm
+                    # 如果下一步到达目标点
+                    if np.logical_and(og_gm[_goal], og_tgm[_idx_map]).any():
+                        achive_count += 1
 
-            f_data[_mea][_constants.reach_goals] += achive_count
-            f_data[_tmea][_constants.reach_goals] += achive_count
-            f_data[_done] = True
-            self.her_storage.append(tuple(f_data))
+                    data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
+                            c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
+                    self.her_storage.append(data)
 
             while len(self.her_storage) > self.maxsize:
                 self.her_storage.pop(0)  # 弹出buffer第一位
@@ -123,7 +127,7 @@ class ReplayBuffer(object):
             goals.append(goal)
             gms.append(gm)
             actions.append(action)
-            future, terminal = self.compute_future(idx=idx, storage=storage)
+            future = self.compute_future(idx=idx, storage=storage)
             futures.append(future)
 
         return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
@@ -134,28 +138,27 @@ class ReplayBuffer(object):
         cur_mea = storage[idx][2]
         j = idx
         terminal = False
+        # print('~~~~~~~~~~~~~~~~~~~~~~')
         while j - idx <= self.time_spans[-1]:
             _, _, j_mea, _, _, _, _, done, _, \
             _, _, _, _, _ = storage[j]
-            if done:  # 代表结束
+            if done and not terminal:  # 代表结束
                 terminal = True
                 terminal_mea = j_mea
-
             if (j - idx) in self.time_spans:  # 如果在 timespans 内
                 if terminal:
                     diff_mea = terminal_mea - cur_mea
                 else:
                     diff_mea = j_mea - cur_mea
-                # 设置为贴近 1
-                # print('diff_mea:', diff_mea)
-                # diff_mea[0] = (diff_mea[0] + 1) * 10  # woods↑
-                # diff_mea[1] = (diff_mea[1] + 1) * 10  # items↑
-                # diff_mea[2] = (diff_mea[2] + 1) * 10  # ammo_used↑
-                # diff_mea[3] = (diff_mea[3] + 1) * 10  # frags↑
-                # diff_mea[4] = (diff_mea[4] + 1) * 10  # is_dead↑
-                # diff_mea[5] = (diff_mea[5] + 1) * 100  # reach_goals↑
-                # diff_mea[6] = (diff_mea[6] + 1) * 10  # imove_counts↑
                 future.extend(diff_mea)
-                # print(j-idx, diff_mea)
+
+                print('j-idx:', j - idx)
+                if terminal:
+                    print("terminal_mea:", terminal_mea)
+                else:
+                    print("j_mea:", j_mea)
+                print("cur_mea:", cur_mea)
+                print('-=-=-=-=-=-=-diff_mea', diff_mea)
+
             j += 1
-        return np.array(future), terminal
+        return np.array(future)

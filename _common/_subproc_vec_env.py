@@ -22,24 +22,27 @@ def _worker(remote, parent_remote, env_fn_wrapper):
             cmd, data = remote.recv()
             if cmd == 'step':
                 train_act, update_eps = data
-
                 whole_obs = env.get_observations()
+                # env.render()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
-
                 if random.random() < update_eps:  # 使用探索
                     if _constants.random_explore or \
                             all_actions[_constants.train_idx] == 5 or all_actions[_constants.train_idx] == 0:
                         # 使用随机探索
+                        # print('Random act', all_actions[_constants.train_idx])
                         all_actions[_constants.train_idx] = np.array(random.randint(1, 4))
                     # else: 使用 simple agent 进行探索
+                    # else:
+                        # print('Simple act')
                 else:
                     # 使用网络输出动作
-                    print("Fault all_actions[_train_idx]...")
+                    # print("Fault all_actions[_train_idx]...")
+                    # print('Network act')
                     all_actions[_constants.train_idx] = train_act[0]
 
                 real_act = all_actions[_constants.train_idx]
-
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
+
                 rew = whole_rew[_constants.train_idx]  # 得到训练智能体的当前步的 reward
                 info['terminal_obs'] = featurize.featurize(whole_obs[_constants.train_idx])  # 保存最后一帧
 

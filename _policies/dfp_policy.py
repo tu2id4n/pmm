@@ -9,23 +9,25 @@ from _common import _constants
 
 def img_cnn(scaled_images, name='img', **kwargs):
     activ = tf.nn.relu
-    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=32, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=64, filter_size=3,
+    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=128, filter_size=3,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, name + 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
+    return activ(linear(layer_3, name + 'fc', n_hidden=512, init_scale=np.sqrt(2)))
 
 
 def gm_cnn(scaled_images, name='gm', **kwargs):
     activ = tf.nn.relu
-    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=32, filter_size=8,
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
+                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
 
-    layer_2 = conv_to_fc(layer_1)
-    return activ(linear(layer_2, name + 'fc1', n_hidden=256, init_scale=np.sqrt(2)))
+    layer_3 = conv_to_fc(layer_2)
+    return activ(linear(layer_3, name + 'fc', n_hidden=256, init_scale=np.sqrt(2)))
 
 
 def simple_fc(scalars, name='sca', n_dim=128):
@@ -173,16 +175,16 @@ class DFPPolicy(BasePolicy):
                             extracted_input, 'act_prev' + str(i), n_hidden=256, init_scale=np.sqrt(2)))
                         action_stream[i - 1] = activ(linear(
                             action_prev[i - 1], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
-
-            # action_sum = action_stream[0]
+            # 求 sum
+            action_sum = action_stream[0]
             n_actions = len(action_stream)
-            # for i in range(1, n_actions):
-            #     action_sum = tf.add(action_sum, action_stream[i])
-
-            # action_mean = tf.divide(action_sum, n_actions)
+            for i in range(1, n_actions):
+                action_sum = tf.add(action_sum, action_stream[i])
+            # 求 mean
+            action_mean = tf.divide(action_sum, n_actions)
 
             for i in range(n_actions):
-                # action_stream[i] = tf.subtract(action_stream[i], action_mean)
+                action_stream[i] = tf.subtract(action_stream[i], action_mean)
                 action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):

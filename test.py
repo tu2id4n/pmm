@@ -8,8 +8,8 @@ import random
 import numpy as np
 from _common import _constants
 
-_test = True  # False to example
-_model_path = "model/simple_1M.zip"
+_test = False  # False to example
+_model_path = "model/test_150k.zip"
 _env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
 _episode = 1000
 _flag = False
@@ -46,7 +46,6 @@ class Test:
                 all_actions[self.train_idx] = train_act
 
                 obs, rewards, done, info = self.env.step(all_actions)
-                # print(obs[0]['imove_counts'])
                 print("train_act:", train_act)
                 self.env.render()
 
@@ -72,15 +71,15 @@ class Test:
             while not done:
                 all_actions = self.env.act(obs)
                 obs, rewards, done, info = self.env.step(all_actions)
-                self.env.render()
+                # featurize_obs = featurize.featurize(obs[self.train_idx])
 
+                self.env.render()
                 if first_render:  # 第一次 render env 时将当前的测试注册.
                     self.env._viewer.window.push_handlers(self)
 
                 if self.flag:
                     self.flag = False
                     done = True
-
             print(info)
             print()
 

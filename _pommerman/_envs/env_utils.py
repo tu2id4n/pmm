@@ -9,6 +9,7 @@ import numpy as np
 
 from pommerman import constants
 from pommerman import utility
+from _common import _constants
 
 passage = constants.Item.Passage.value
 rigid = constants.Item.Rigid.value
@@ -23,7 +24,7 @@ agent0 = constants.Item.Agent0.value
 agent1 = constants.Item.Agent1.value
 agent2 = constants.Item.Agent2.value
 agent3 = constants.Item.Agent3.value
-_num_rigid = 36
+_num_rigid = _constants.num_rigid
 
 def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
@@ -196,8 +197,13 @@ def make_items(board, num_items):
 def generate_item(board, position, size=11):
     def lay_item(value, inaccess, board):
         '''Lays all of the walls on a board'''
-        x = random.randint(0, 10)
-        y = random.randint(0, 10)
+        pos_x, pos_y = position
+        x_low = pos_x-3 if pos_x-3 >= 0 else 0
+        x_high = pos_x+3 if pos_x+3 <= 10 else 10
+        y_low = pos_y - 3 if pos_y - 3 >= 0 else 0
+        y_high = pos_y + 3 if pos_y + 3 <= 10 else 10
+        x = random.randint(x_low, x_high)
+        y = random.randint(y_low, y_high)
         while (x, y) in inaccess or board[x, y] != passage:
             x = random.randint(0, 10)
             y = random.randint(0, 10)

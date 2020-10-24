@@ -139,7 +139,7 @@ class DFP(BaseRLModel):
             # writer.close()
 
     def learn(self, total_timesteps, callback=None, tb_log_name="DFP", reset_num_timesteps=True,
-              save_interval=10000, save_path=None):
+              save_interval=10000, save_unit=1000, save_path=None):
 
         print('-------------------------------')
         print('| exploration_final_eps =', _constants.exploration_final_eps)
@@ -155,7 +155,7 @@ class DFP(BaseRLModel):
         print('| n_actions =', _constants.n_actions)
         print('| gamma =', _constants.gamma)
         print("| Save Path =", save_path)
-        print("| Save Interval =", save_interval / 100000, "M")
+        print("| Save Interval =", save_interval / save_unit, "K")
         print('-------------------------------')
         new_tb_log = self._init_num_timesteps(reset_num_timesteps)
         save_interval_st = save_interval
@@ -236,7 +236,7 @@ class DFP(BaseRLModel):
 
                 if self.num_timesteps >= save_interval_st:
                     save_interval_st += save_interval
-                    s_path = save_path + '_' + str(int(self.num_timesteps / save_interval)) + 'M.zip'
+                    s_path = save_path + '_' + str(int(self.num_timesteps / save_unit)) + 'k.zip'
                     self.save(save_path=s_path)
 
                 self.num_timesteps += 1
@@ -250,7 +250,8 @@ class DFP(BaseRLModel):
         for t in range(self.time_len):
             ts = _constants.time_span[t] - 1
             gamma = _constants.gamma ** ts
-            for i in range(m * t, m * (t + 1)):
+            # for i in range(m * t, m * (t + 1)):
+            for i in range(self.time_len):
                 goals[i] *= gamma
         actions = []
         if n_actions == 4:
