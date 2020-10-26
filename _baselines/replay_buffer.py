@@ -1,6 +1,7 @@
 import random
 import numpy as np
 from _common import _constants
+import copy
 
 _img = 0
 _sca = 1
@@ -54,16 +55,17 @@ class ReplayBuffer(object):
             self.her = 0
             st = len(self.storage) - 1 - self.her_size
             f_data = []
-            for t in range(self.her_size + 1):
-                tmp_data = self.storage[st + t]
+            for t in range(self.her_size):
+                tmp_data = copy.deepcopy(self.storage[st + t])
                 if tmp_data[_done]:
                     f_data.append(tmp_data)
-            f_data.append(self.storage[st + self.her_size])
+            f_data.append(copy.deepcopy(self.storage[st + self.her_size]))
 
             f_index = 0
             achive_count = 0
+
             for t in range(self.her_size):
-                cur_data = self.storage[st + t]
+                cur_data = copy.deepcopy(self.storage[st + t])
                 c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win, \
                 c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm = cur_data
 
@@ -73,6 +75,7 @@ class ReplayBuffer(object):
                 if c_done:  # 如果本步结束
                     f_index += 1
                     achive_count = 0
+                    c_done = True
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
                     self.her_storage.append(data)
@@ -97,10 +100,10 @@ class ReplayBuffer(object):
                     if np.logical_and(og_gm[_goal], og_tgm[_idx_map]).any():
                         achive_count += 1
                     if t == self.her_size - 1:
-                        # print('fix done')
                         c_done = True
                     data = (c_img, c_sca, c_mea, c_goal, c_gm, c_action, c_rew, c_done, c_win,
                             c_t_img, c_t_sca, c_t_mea, c_t_goal, c_t_gm)
+
                     self.her_storage.append(data)
 
             while len(self.her_storage) > self.maxsize:
@@ -110,43 +113,46 @@ class ReplayBuffer(object):
         return self.seq_sample()
 
     def seq_sample(self):
-        if self.hindsight and random.random() < _constants.her_pb:
-            print('now her...')
-            storage = self.her_storage
-        else:
-            storage = self.storage
-        _len = len(storage) - 1 - self.time_spans[-1]
+        _len = len(self.storage) - 1 - self.time_spans[-1]
+        her_len = len(self.her_storage) - 1 - self.time_spans[-1]
         imgs, scas, meas, goals, gms, actions, futures = [], [], [], [], [], [], []
-        # terminal = True
-        # idx = random.randint(0, _len)
-        for i in range(self.batch_size):
-            idx = random.randint(0, _len)
 
+        storage = self.storage
+        for i in range(self.batch_size):
+            her_flag = False
+            if self.hindsight and i >= self.batch_size / 2:
+                _len = her_len
+                storage = self.her_storage
+                her_flag = True
+
+            idx = random.randint(0, _len)
             data = storage[idx]
-            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
-            while done:
+            while data[_done]:
                 idx = random.randint(0, _len)
+                data = storage[idx]
+
+            img, sca, mea, goal, gm, action, rew, done, win, t_img, t_sca, t_mea, t_goal, t_gm = data
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
             goals.append(goal)
             gms.append(gm)
             actions.append(action)
-            future = self.compute_future(idx=idx, storage=storage)
+            future = self.compute_future(idx=idx, storage=storage, her_flag=her_flag)
             futures.append(future)
 
         return np.array(imgs), np.array(scas), np.array(meas), np.array(goals), np.array(gms), \
                np.array(actions), np.array(futures)
 
-    def compute_future(self, idx, storage):
+    def compute_future(self, idx, storage, her_flag):
         future = []
-        cur_mea = storage[idx][2]
+        cur_mea = storage[idx][_mea]
         j = idx
         terminal = False
         while j - idx <= self.time_spans[-1]:
-            _, _, j_mea, _, _, _, _, done, _, \
+            _, _, j_mea, _, _, _, _, j_done, _, \
             _, _, _, _, _ = storage[j]
-            if done and not terminal:  # 代表结束
+            if j_done and not terminal:  # 代表结束
                 terminal = True
                 terminal_mea = j_mea
             if (j - idx) in self.time_spans:  # 如果在 timespans 内
@@ -156,13 +162,14 @@ class ReplayBuffer(object):
                     diff_mea = j_mea - cur_mea
                 future.extend(diff_mea)
 
-                print('j-idx:', j - idx)
-                if terminal:
-                    print("terminal_mea:", terminal_mea)
-                else:
-                    print("j_mea:", j_mea)
-                print("cur_mea:", cur_mea)
-                print('-=-=-=-=-=-=-diff_mea', diff_mea)
+                if diff_mea[0] < 0:
+                    print('her_flag', her_flag)
+                    print('idx', idx)
+                    print('cur_mea', storage[idx][_mea])
+                    k = idx
+                    while k - idx <= self.time_spans[-1]:
+                        print('k-idx', k - idx, storage[k][_mea], storage[k][_done])
+                        k += 1
 
             j += 1
         return np.array(future)
