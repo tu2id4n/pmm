@@ -26,7 +26,8 @@ agent2 = constants.Item.Agent2.value
 agent3 = constants.Item.Agent3.value
 _num_rigid = _constants.num_rigid
 
-def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
+
+def make_board_v1(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
 
     The numbers refer to the Item enum in constants. This is:
@@ -198,8 +199,8 @@ def generate_item(board, position, size=11):
     def lay_item(value, inaccess, board):
         '''Lays all of the walls on a board'''
         pos_x, pos_y = position
-        x_low = pos_x-3 if pos_x-3 >= 0 else 0
-        x_high = pos_x+3 if pos_x+3 <= 10 else 10
+        x_low = pos_x - 3 if pos_x - 3 >= 0 else 0
+        x_high = pos_x + 3 if pos_x + 3 <= 10 else 10
         y_low = pos_y - 3 if pos_y - 3 >= 0 else 0
         y_high = pos_y + 3 if pos_y + 3 <= 10 else 10
         x = random.randint(x_low, x_high)
@@ -217,3 +218,4 @@ def generate_item(board, position, size=11):
     board = lay_item(item_value, inaccess, board)
 
     return board
+

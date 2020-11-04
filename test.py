@@ -9,14 +9,15 @@ import numpy as np
 from _common import _constants
 
 _test = True  # False to example
-_model_path = "model/simple_50k.zip"
-_env_name = 'maze-v1'  # 'PommeRadioCompetition-v21'
+_model_path = "model/simple0.99_200k.zip"
+_env_name = 'maze-v2'  # 'PommeRadioCompetition-v21'
 _episode = 1000
 _flag = False
 _agent_list = [agents.SimpleAgent(),
-               _agents.SuicideAgent(),
-               _agents.SuicideAgent(),
-               _agents.SuicideAgent()]
+               agents.SimpleAgent(),
+               agents.SimpleAgent(),
+               agents.SimpleAgent(),
+               ]
 
 
 class Test:
@@ -46,7 +47,7 @@ class Test:
                 all_actions[self.train_idx] = train_act
 
                 obs, rewards, done, info = self.env.step(all_actions)
-                print("train_act:", train_act)
+                # print("train_act:", train_act)
                 self.env.render()
 
                 if first_render:  # 第一次 render env 时将当前的测试注册.

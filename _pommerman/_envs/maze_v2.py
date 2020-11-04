@@ -9,10 +9,11 @@ import copy
 import random
 from . import env_utils
 from _common import _constants
-
+from _common import featurize
 
 max_setps = _constants.max_setps
 meas_size = _constants.meas_size
+max_dijk = _constants.max_dijk
 
 
 class Pomme(v0.Pomme):
@@ -90,17 +91,7 @@ class Pomme(v0.Pomme):
         observation['ammo_used'] = 0
         observation['goal'] = self.goal
         observation['imove_counts'] = 0
-        observation['reach_goals'] = 0
         observation['is_dead'] = False
-
-        goal_board = observation['board']
-        goal_positons = []
-        for x in range(len(goal_board)):
-            for y in range(len(goal_board)):
-                if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
-                                          constants.Item.Kick.value]:
-                    goal_positons.append((x, y))
-        observation['goal_positions'] = goal_positons
 
         self.observation_pre = copy.deepcopy(observation)
         observations[self.train_idx] = copy.deepcopy(observation)
@@ -143,7 +134,7 @@ class Pomme(v0.Pomme):
         ammo_used_pre = self.observation_pre['ammo_used']
         position_pre = self.observation_pre['position']
         imove_counts_pre = self.observation_pre['imove_counts']
-        reach_goals_pre = self.observation_pre['reach_goals']
+        # reach_goals_pre = self.observation_pre['reach_goals']
 
         position = observation['position']
         strength = observation['blast_strength'] - 1
@@ -213,32 +204,35 @@ class Pomme(v0.Pomme):
         # 总共获得了多少个 items
         self.get_items = observation['items']
 
-        # 是否达成目标
-        self.achive = position in self.observation_pre['goal_positions']
+        # # 是否达成目标
+        # self.achive = position in self.observation_pre['goal_positions']
+        #
+        # # 如果达成目标则获得奖励
+        # if self.achive:
+        #     reach_goals_pre += 1
 
-        self.interval += 1
-        # 如果达成目标则重新设置目标
-        if self.achive:  # or (self.interval + 1) % max_interval == 0:
-            if self.achive:
-                reach_goals_pre += 1
-            self.interval = 0
-            self.generate_item(position)
+        # observation['reach_goals'] = reach_goals_pre
 
-        observation['reach_goals'] = reach_goals_pre
-
-        # 添加goal_positions
-        goal_board = observation['board']
-        goal_positons = []
-        for x in range(len(goal_board)):
-            for y in range(len(goal_board)):
-                if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
-                                          constants.Item.Kick.value]:
-                    goal_positons.append((x, y))
-        observation['goal_positions'] = goal_positons
+        # # 添加goal_positions
+        # goal_board = observation['board']
+        # goal_positons = []
+        # for x in range(len(goal_board)):
+        #     for y in range(len(goal_board)):
+        #         if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
+        #                                   constants.Item.Kick.value]:
+        #             goal_positons.append((x, y))
+        # observation['goal_positions'] = goal_positons
 
         # 是否移动
-        if position == position_pre and self._intended_actions[0] != 0 \
-                or self._intended_actions[0] != 5:
+        # ntc.
+
+        dijk_pos = featurize.extra_position(self.dijk_act, observation)
+        self.is_dijk = dijk_pos == observation['position']
+        # print(self.is_dijk)
+        if not self.is_dijk and self.dijk_step > max_dijk:
+            # print(board_pre)
+            # print(self._intended_actions[0])
+            # print('imove')
             imove_counts_pre += 1
         observation['imove_counts'] = imove_counts_pre
 
@@ -251,6 +245,16 @@ class Pomme(v0.Pomme):
     def step(self, actions):
         self._step_count += 1
 
+        if self.is_dijk or self.dijk_step > max_dijk:  # 重启 dijksta
+            # print()
+            # print('reset dijk')
+            self.dijk_step = 0
+            self.dijk_act = actions[0]
+            self.is_dijk = False
+
+        self.dijk_step += 1
+        actions[0] = featurize.dijkstra_act(self.observation_pre, self.dijk_act)
+        # print(self.dijk_act, self.dijk_step)
         self._intended_actions = actions
 
         max_blast_strength = self._agent_view_size or 10
@@ -266,9 +270,9 @@ class Pomme(v0.Pomme):
         self._board, self._agents, self._bombs, self._items, self._flames = \
             result[:5]
         obs = self.get_observations()
-        done = self._get_done(obs[self.train_idx]['is_dead'])
-        reward = self.get_rewards_maze_v1(done, obs[self.train_idx]['is_dead'])
-        info = self._get_info(done, reward, obs[self.train_idx]['is_dead'])
+        done = self._get_done()
+        reward = self.get_rewards_v2(done)
+        info = self._get_info(done, reward)
 
         if done:
             # Callback to let the agents know that the game has ended.
@@ -297,69 +301,97 @@ class Pomme(v0.Pomme):
                 agent.reset()
 
         self.observation_pre = None
-        self.achive = False
+        # self.achive = False
         self.goal = self.get_goal(goal)
         self.get_items = 0
-        self.interval = 0
+        self.is_dijk = True
+        self.dijk_act = 0
+        self.dijk_step = 0
 
         return self.get_reset_observations()
 
-    def make_board(self):
-        self._board = env_utils.make_board(self._board_size, self._num_rigid,
-                                           self._num_wood, len(self._agents))
-        self.generate_item((1, 1))
-
-    def generate_item(self, position):
-        for i in range(1):
-            self._board = env_utils.generate_item(self._board, position, self._board_size)
-            self.achive = False
-
-    def make_items(self):
-        self._items = env_utils.make_items(self._board, self._num_items)
-
+    # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
     def get_goal(self, goal=None):
         if goal:
             return np.array(goal)
 
         goal = np.zeros(meas_size)
+        for i in range(meas_size):
+            goal[i] = random.uniform(-1, 1)
 
-        # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
-        goal[0] = random.uniform(0, 1)
-        goal[1] = random.uniform(0, 1)
-        goal[2] = random.uniform(-1, 1)
-        goal[3] = 0  # frags
-        goal[4] = random.uniform(-1, 0)
-        goal[5] = random.uniform(0, 1)
-        goal[6] = random.uniform(-0.02, 0)
         return np.array(goal)
 
-    def _get_done(self, is_dead):
+    def _get_done(self):
+        alive = [agent for agent in self._agents if agent.is_alive]
+        alive_ids = sorted([agent.agent_id for agent in alive])
+
         if self._step_count >= self._max_steps:
             return True
-        elif is_dead:
+        elif self.train_idx is not None and self.train_idx not in alive_ids:
+            return True
+        elif any([
+            len(alive_ids) <= 1,
+            alive_ids == [0, 2],
+            alive_ids == [1, 3],
+        ]):
             return True
         return False
 
-    def get_rewards_maze_v1(self, done, is_dead):
-        if done:
-            return [self.get_items, 0, 0, 0]
-        return [0, 0, 0, 0]
-
-    def _get_info(self, done, rewards, is_dead):
+    def _get_info(self, done, rewards):
+        alive = [agent for agent in self._agents if agent.is_alive]
+        alive_ids = sorted([agent.agent_id for agent in alive])
         if done:
             if self._step_count >= self._max_steps:
                 return {
-                    'result': constants.Result.Win,
-                    'get items number': self.get_items,
+                    'result': constants.Result.Tie,
                 }
-            elif is_dead:
+            elif any([
+                alive_ids == [0, 2],
+                alive_ids == [0],
+                alive_ids == [2]
+            ]):
+
+                return {
+                    'result': constants.Result.Win,
+                    'winners': [0, 2],
+                }
+
+            else:
                 return {
                     'result': constants.Result.Loss,
-                    'get items number': self.get_items,
+                    'winners': [1, 3],
                 }
+
         return {
             'result': constants.Result.Incomplete,
         }
+
+    def get_rewards_v2(self, done):
+
+        alive = [agent for agent in self._agents if agent.is_alive]
+        alive_ids = sorted([agent.agent_id for agent in alive])
+        if done:
+            if self._step_count >= self._max_steps:
+                return [-1, -1, -1, -1]
+            elif any([
+                alive_ids == [0, 2],
+                alive_ids == [0],
+                alive_ids == [2]
+            ]):
+
+                return [1, -1, 1, -1]
+
+            else:
+                return [-1, 1, -1, 1]
+
+        return [0, 0, 0, 0]
+
+    def make_board(self):
+        self._board = utility.make_board(self._board_size, _constants.num_rigid,
+                                         _constants.num_wood, len(self._agents))
+
+    def make_items(self):
+        self._items = utility.make_items(self._board, _constants.num_wood)
 
     @staticmethod
     def featurize(obs):

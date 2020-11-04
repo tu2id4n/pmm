@@ -1,7 +1,7 @@
 '''An agent that preforms a random action each step'''
 from pommerman.agents import BaseAgent
 from pommerman import characters
-
+import random
 
 class SuicideAgent(BaseAgent):
     """The Random Agent that returns random actions given an action_space."""

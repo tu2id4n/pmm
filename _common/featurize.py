@@ -1,9 +1,10 @@
 import copy
 import queue
 import numpy as np
-from pommerman import constants
+from pommerman import constants, utility
 from gym import spaces
 import random
+from . import _constants
 
 passage = constants.Item.Passage.value
 rigid = constants.Item.Rigid.value
@@ -16,11 +17,11 @@ kick = constants.Item.Kick.value
 
 
 def get_img_space():
-    return spaces.Box(low=0, high=1, shape=(11, 11, 10))
+    return spaces.Box(low=0, high=1, shape=(11, 11, 9))
 
 
-def get_goalmap_space():
-    return spaces.Box(low=0, high=1, shape=(11, 11, 4))
+# def get_goalmap_space():
+#     return spaces.Box(low=0, high=1, shape=(11, 11, 4))
 
 
 def get_scas_space():
@@ -29,8 +30,8 @@ def get_scas_space():
 
 
 def get_meas_space():
-    return spaces.Box(low=0, high=1, shape=(2,))
-    # 7dim: [woods↑, items↑, ammo_used↑↓, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
+    return spaces.Box(low=0, high=1, shape=(_constants.meas_size,))
+    # 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, imove_counts↑]
 
 
 def get_goal_space():
@@ -38,7 +39,7 @@ def get_goal_space():
 
 
 def get_action_space():
-    return spaces.Discrete(6)
+    return spaces.Discrete(_constants.n_actions)
 
 
 # 分离img \ meas \ scalars 并处理为网络的输入
@@ -68,8 +69,8 @@ def featurize(obs):
     meas['frags'] = obs['frags']
     meas['is_dead'] = obs['is_dead']
     meas['position'] = obs['position']
-    meas['goal_positions'] = obs['goal_positions']
-    meas['reach_goals'] = obs['reach_goals']
+    # meas['goal_positions'] = obs['goal_positions']
+    # meas['reach_goals'] = obs['reach_goals']
     meas['step_counts'] = obs['step_count']
     meas['imove_counts'] = obs['imove_counts']
     meas_fea = measurements_extra(meas)
@@ -78,10 +79,10 @@ def featurize(obs):
     goal_fea = np.array(obs['goal'], dtype=np.float32)
 
     # 提取 goalmap
-    gm_fea = goalmap_extra(img)
+    # gm_fea = goalmap_extra(img)
     # print('imove_counts', obs['imove_counts'])
     # print('step_count', obs['step_count'])
-    return img_fea, scas_fea, meas_fea, goal_fea, gm_fea
+    return img_fea, scas_fea, meas_fea, goal_fea  # , gm_fea
     # [ (11, 11, 10), (7, ), (5, ), (5, ), (11, 11, 3) ]
 
 
@@ -109,25 +110,25 @@ def img_extra(img):
             enemies_idx.append(e.value)
 
     maps = []
-    for i in [passage, rigid, wood, item, fog, train_idx, teammate_idx]:
+    for i in [fog, passage, rigid, wood, item, train_idx, teammate_idx]:
         maps.append(board == i)
     maps.append(np.logical_or(
         board == enemies_idx[0], board == enemies_idx[1]))
 
-    maps.append(bomb_map / 10)
-    maps.append(move_direction / 4)
+    maps.append(bomb_map / 12)
+    # maps.append(move_direction / 4)
 
-    return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 10
+    return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 9
 
 
 # goalmap提取
-def goalmap_extra(img):
-    board = img['board']
-    maps = []
-    for i in [passage, rigid, img['idx'], extra_bomb]:
-        maps.append(board == i)
-
-    return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 4
+# def goalmap_extra(img):
+#     board = img['board']
+#     maps = []
+#     for i in [passage, rigid, img['idx'], extra_bomb]:
+#         maps.append(board == i)
+#
+#     return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 4
 
 
 # 标量提取
@@ -165,13 +166,13 @@ def measurements_extra(meas):
     items = meas['items']  # / 10 if meas['items'] / 10 <= 1 else 1
     ammo_used = meas['ammo_used']  # / 20 if meas['ammo_used'] / 20 <= 1 else 1
 
-    # maps.append(woods)
-    # maps.append(items)
-    # maps.append(ammo_used)
-    # maps.append(meas['frags'])
-    # maps.append(meas['is_dead'])
+    maps.append(woods)
+    maps.append(items)
+    maps.append(ammo_used)
+    maps.append(meas['frags'])
+    maps.append(meas['is_dead'])
 
-    maps.append(meas['reach_goals'])
+    # maps.append(meas['reach_goals'])
     maps.append(meas['imove_counts'])
     return np.array(maps, dtype=np.float32)
 
@@ -295,25 +296,138 @@ def get_all_bomb_map(img, rang=11):
 
     bomb_life = np.where(bomb_life > 0, bomb_life + 3, bomb_life)
     flame_life = np.where(flame_life == 0, 15, flame_life)
-    flame_life = np.where(flame_life == 1, 15, flame_life)
+    # flame_life = np.where(flame_life == 1, 15, flame_life)
     bomb_life = np.where(flame_life != 15, flame_life, bomb_life)
 
     return bomb_life
 
 
-def choose_act(obs, act):
-    act = act[0]
-    board = obs['board']
-    position = obs['position']
-    x, y = position
-    move = [(-1, 0), (1, 0), (0, -1), (0, 1)]
-    mx, my = move[act - 1]
-    if x + mx < 0 or x + mx > 10 or y + my < 0 or y + my > 10 or board[x + mx][y + my] in [rigid, wood]:
-        acts = [1, 2, 3, 4]
-        for i in range(3, -1, -1):
-            r, c = move[i]
-            if x + r < 0 or x + r > 10 or y + c < 0 or y + c > 10 or board[x + r][y + c] in [rigid, wood]:
-                acts.pop(i)
-        new_act = random.sample(acts, 1)
-        return np.array(new_act)
-    return np.array([act])
+def extra_position(pos_abs, state):
+    if pos_abs == 121:
+        return state['position']
+
+    for x in range(11):
+        for y in range(11):
+            if x * 11 + y == pos_abs:
+                return (x, y)
+
+
+def position_is_passable(board, position, enemies):
+    '''Determins if a possible can be passed'''
+    return all([
+        any([
+            utility.position_is_agent(board, position),
+            utility.position_is_powerup(board, position),
+            utility.position_is_passage(board, position),
+            utility.position_is_fog(board, position),
+        ]), not utility.position_is_enemy(board, position, enemies)
+    ])
+
+
+def isLegal_act(state, move, rang=11):
+    my_x, my_y = state['position']
+    row, col = move
+    passage = constants.Item.Passage.value
+    bomb = constants.Item.Passage.value
+    if 0 <= my_x + row <= rang - 1 and 0 <= my_y + col <= rang - 1:
+        if state['can_kick']:
+            return state['board'][(my_x + row, my_y + col)] in [bomb, passage]
+        else:
+            return state['board'][(my_x + row, my_y + col)] == passage
+    else:
+        return False
+
+
+def dijkstra_act(obs_nf, goal_abs, exclude=None, rang=11):
+    # 放炸弹
+    if goal_abs == rang * rang:
+        return 5
+
+    # 停止在原地
+    my_position = tuple(obs_nf['position'])
+    goal = extra_position(goal_abs, obs_nf)
+    if goal == my_position:
+        return 0
+
+    board = np.array(obs_nf['board'])
+    enemies = [constants.Item(e) for e in obs_nf['enemies']]
+
+    if exclude is None:
+        exclude = [
+            constants.Item.Rigid,
+            constants.Item.Wood,
+        ]
+
+    dist = {}
+    prev = {}
+    Q = queue.Queue()
+
+    # my_x, my_y = my_position
+    for r in range(0, rang):
+        for c in range(0, rang):
+            position = (r, c)
+
+            if any([utility.position_in_items(board, position, exclude)]):
+                continue
+
+            prev[position] = None
+
+            if position == my_position:
+                Q.put(position)
+                dist[position] = 0
+            else:
+                dist[position] = np.inf
+
+    while not Q.empty():
+        position = Q.get()
+
+        if position_is_passable(board, position, enemies):
+            x, y = position
+            val = dist[(x, y)] + 1
+            for row, col in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
+                new_position = (row + x, col + y)
+                if new_position not in dist:
+                    continue
+
+                if val < dist[new_position]:
+                    dist[new_position] = val
+                    prev[new_position] = position
+                    Q.put(new_position)
+                elif val == dist[new_position] and random.random() < .5:
+                    dist[new_position] = val
+                    prev[new_position] = position
+
+    row_g, col_g = goal
+    my_x, my_y = my_position
+    up = (-1, 0)
+    down = (1, 0)
+    left = (0, -1)
+    right = (0, 1)
+    # 判断goal是否可以达到
+    while goal in dist and prev[goal] != my_position:
+        goal = prev[goal]
+
+    legal_act = []
+    # 无法到达有效目的
+    if goal not in dist:
+        # 可以向下行走
+        if row_g > my_x:
+            if isLegal_act(obs_nf, down, rang=rang): legal_act.append(2)
+        elif row_g < my_x:
+            if isLegal_act(obs_nf, up, rang=rang): legal_act.append(1)
+        # 可以向右行走
+        if col_g > my_x:
+            if isLegal_act(obs_nf, right, rang=rang): legal_act.append(4)
+        elif col_g < my_x:
+            if isLegal_act(obs_nf, left, rang=rang): legal_act.append(3)
+        if legal_act:
+            return random.choice(legal_act)
+    # 可以达到的目的
+    else:
+        count = 1
+        for act_to in [up, down, left, right]:
+            row, col = act_to
+            if goal == (my_x + row, my_y + col):
+                return count
+            count += 1
+    return 0

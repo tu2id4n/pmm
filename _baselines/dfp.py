@@ -64,7 +64,6 @@ class DFP(BaseRLModel):
         self.meas_space = featurize.get_meas_space()
         self.goal_space = featurize.get_goal_space()
         self.action_space = featurize.get_action_space()
-        self.goalmap_space = featurize.get_goalmap_space()
         self.n_actions = _constants.n_actions
         self.time_spans = time_spans
         self.time_len = len(self.time_spans)
@@ -88,14 +87,14 @@ class DFP(BaseRLModel):
                 n_batch_train = None
 
                 act_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space, self.goal_space,
-                                        self.action_space, self.goalmap_space, self.n_envs, 1, n_batch_step,
+                                        self.action_space, self.n_envs, 1, n_batch_step,
                                         pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                         **self.policy_kwargs)
 
                 with tf.variable_scope('train_model', reuse=True,
                                        custom_getter=tf_util.outer_scope_getter("train_model")):
                     train_model = self.policy(self.sess, self.img_space, self.scas_space, self.meas_space,
-                                              self.goal_space, self.action_space, self.goalmap_space,
+                                              self.goal_space, self.action_space,
                                               self.n_envs // self.nminibatches, self.n_steps, n_batch_train,
                                               pgn_params=self.pgn_params, reuse=False, future_size=self.future_size,
                                               **self.policy_kwargs)
@@ -187,7 +186,7 @@ class DFP(BaseRLModel):
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)
                 futures = self.convert_futures(futures)
-                train_act = self.make_action(obs[0][3], futures[0], n_actions=_constants.n_actions)
+                train_act = self.make_action(obs[0][3], futures[0])
                 train_act = np.array([train_act])
                 # 这里使用探索
                 new_obs, rew, done, terminal_obs, win, real_act = self.env.step([(train_act, update_eps)])
@@ -216,16 +215,15 @@ class DFP(BaseRLModel):
 
                 if can_sample and self.num_timesteps > self.learning_starts:
                     # print("Sampling ...")
-                    imgs, scas, meas, goals, gms, actions, _futures = self.replay_buffer.sample()
+                    imgs, scas, meas, goals, actions, _futures = self.replay_buffer.sample()
                     if writer is not None:
                         # print("Training ...")
-                        target_futures = self.act_model.get_futures(imgs, scas, meas, goals, gms)
+                        target_futures = self.act_model.get_futures(imgs, scas, meas, goals)
                         targets = self.get_targets(actions, _futures, target_futures)
 
                         td_map = {self.train_model.obs_ph: imgs, self.train_model.sca_ph: scas,
                                   self.train_model.mea_ph: meas, self.train_model.goal_ph: goals,
-                                  self.targets_ph: targets, self.train_model.gm_ph: gms,
-                                  }
+                                  self.targets_ph: targets}
 
                         summary, loss, _, mse, fs = self.sess.run([
                             self.summay, self.loss, self._train, self.mse, self.fs], td_map)
@@ -241,40 +239,39 @@ class DFP(BaseRLModel):
 
                 self.num_timesteps += 1
 
-    def make_action(self, goal, futures, n_actions=6):
+    def make_action(self, goal, futures):
         goals = np.tile(goal, self.time_len)
         goals = np.array(goals, dtype=np.float32)
         m = self.meas_size
 
-        # 衰减
+        # 衰减-v1
         for t in range(self.time_len):
             ts = _constants.time_span[t] - 1
             gamma = _constants.gamma ** ts
-            # for i in range(m * t, m * (t + 1)):
-            for i in range(self.time_len):
+            for i in range(m * t, m * (t + 1)):
+                # for i in range(self.time_len):
                 goals[i] *= gamma
-        actions = []
-        if n_actions == 4:
-            # WASD
-            for f in futures:
-                actions.append(goals.dot(f))
-            return np.argmax(np.array(actions)) + 1
-        else:
-            # WASD Stop Bomb
-            print("Fault make_action...")
-            for f in futures:
-                actions.append(goals.dot(f))
 
-            return np.argmax(np.array(actions))
+        # 衰减-v2
+        # for t in range(self.time_len):
+        #     gamma = _constants.gamma ** t
+        #     for i in range(m*t, m*(t+1)):
+        #         goals[i] *= gamma
+
+        actions = []
+
+        # 122dim
+        for f in futures:
+            actions.append(goals.dot(f))
+
+        return np.argmax(np.array(actions))
 
     def predict(self, obs):
         obs = np.array(obs).reshape(1, -1)
         futures = self.act_model.step(obs)
         futures = self.convert_futures(futures)
-        for i in range(len(futures[0])):
-            print("act", i+1, futures[0][i])
-        print()
-        action = self.make_action(obs[0][3], futures[0], n_actions=_constants.n_actions)
+
+        action = self.make_action(obs[0][3], futures[0])
         return action
 
     def convert_futures(self, futures):
@@ -286,7 +283,7 @@ class DFP(BaseRLModel):
             if _constants.n_actions == 4:
                 target_futures[actions[i] - 1][i] = copy.deepcopy(futures[i])
             else:
-                print("Fault target_futures...")
+                # print("Fault target_futures...")
                 target_futures[actions[i]][i] = futures[i]
         # 将小于0的置为0
         # target_futures = np.where(target_futures > 0, target_futures, 0)
@@ -313,7 +310,6 @@ class DFP(BaseRLModel):
             "meas_space": self.meas_space,
             "goal_space": self.goal_space,
             "action_space": self.action_space,
-            "goalmap_space": self.goalmap_space,
             "n_actions": self.n_actions,
             "time_spans": self.time_spans,
             "future_len": self.time_len,

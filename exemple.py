@@ -5,23 +5,28 @@ from tqdm import tqdm
 from _common import featurize
 
 agent_list = [
-    agents.SimpleAgent(),
     _agents.SuicideAgent(),
-    _agents.SuicideAgent(),
-    _agents.SuicideAgent(),
+    _agents.StopAgent(),
+    _agents.StopAgent(),
+    _agents.StopAgent(),
 ]
 
-env = pommerman.make('maze-v1', agent_list)
+env = pommerman.make('maze-v2', agent_list)
 
-for episode in tqdm(range(10000)):
-    obs = env.reset(goal=[0, 0, 0, 0, 1, 0, 1])
+red_win = 0
+for episode in tqdm(range(100)):
+    obs = env.reset()
     done = False
-    first_render = True
     count = 0
     while not done:
         all_actions = env.act(obs)
+        # fea = featurize.featurize(obs[0])
+        # print("random act:", all_actions[0])
         obs, rewards, done, info = env.step(all_actions)
+        print("imove_counts", obs[0]['imove_counts'])
         env.render()
     print(rewards, info)
-print('1000 test ok')
+    if rewards[0] == 1:
+        red_win += 1
+print('1000 test:', red_win)
 env.close()

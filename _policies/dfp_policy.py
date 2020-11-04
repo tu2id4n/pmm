@@ -9,47 +9,48 @@ from _common import _constants
 
 def img_cnn(scaled_images, name='img', **kwargs):
     activ = tf.nn.relu
-    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=32, filter_size=8,
+    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=16, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=4,
+    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=32, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=128, filter_size=3,
+    layer_3 = activ(conv(layer_2, name + 'c3', n_filters=64, filter_size=3,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
     layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, name + 'fc', n_hidden=512, init_scale=np.sqrt(2)))
-
-
-def gm_cnn(scaled_images, name='gm', **kwargs):
-    activ = tf.nn.relu
-    layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
-                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-    layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=8,
-                         stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-
-    layer_3 = conv_to_fc(layer_2)
     return activ(linear(layer_3, name + 'fc', n_hidden=256, init_scale=np.sqrt(2)))
+
+
+# def gm_cnn(scaled_images, name='gm', **kwargs):
+#     activ = tf.nn.relu
+#     layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
+#                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+#     layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=8,
+#                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+#
+#     layer_3 = conv_to_fc(layer_2)
+#     return activ(linear(layer_3, name + 'fc', n_hidden=256, init_scale=np.sqrt(2)))
 
 
 def simple_fc(scalars, name='sca', n_dim=128):
     activ = tf.nn.relu
     layer_1 = activ(
         linear(scalars, name + '1', n_hidden=n_dim, init_scale=np.sqrt(2)))
-
-    return activ(linear(layer_1, name + '3', n_hidden=n_dim, init_scale=np.sqrt(2)))
+    layer_2 = activ(
+        linear(layer_1, name + '2', n_hidden=n_dim, init_scale=np.sqrt(2)))
+    return activ(linear(layer_2, name + '3', n_hidden=n_dim, init_scale=np.sqrt(2)))
 
 
 class DFPPolicy(BasePolicy):
-    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, gm_space, n_env, n_steps, n_batch,
+    def __init__(self, sess, ob_space, sc_space, me_space, g_space, ac_space, n_env, n_steps, n_batch,
                  reuse=False, scale=False, pgn_params=None,
-                 obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, gm_phs=None, future_size=6):
+                 obs_phs=None, sca_phs=None, mea_phs=None, goal_phs=None, future_size=6):
         super(DFPPolicy, self).__init__(sess, ob_space, ac_space, n_env, n_steps, n_batch, reuse=reuse, scale=scale,
                                         obs_phs=obs_phs)
         with tf.variable_scope("input_fc", reuse=False):
-            if gm_phs is None:
-                self._gm_ph, self._processed_gm = observation_input(
-                    gm_space, n_batch, scale=scale)
-            else:
-                self._gm_ph, self._processed_gm = gm_phs
+            # if gm_phs is None:
+            #     self._gm_ph, self._processed_gm = observation_input(
+            #         gm_space, n_batch, scale=scale)
+            # else:
+            #     self._gm_ph, self._processed_gm = gm_phs
 
             if sca_phs is None:
                 self._sca_ph, self._processed_sca = observation_input(
@@ -79,10 +80,7 @@ class DFPPolicy(BasePolicy):
                 # CNN提取棋盘特征
                 extracted_img = img_cnn(self.processed_obs)
                 extracted_img = tf.layers.flatten(extracted_img)
-            with tf.variable_scope('gm_cnn', reuse=reuse):
-                # CNN提取goalmap特征
-                extracted_gm = gm_cnn(self.processed_gm)
-                extracted_gm = tf.layers.flatten(extracted_gm)
+
             with tf.variable_scope('sca_fc', reuse=reuse):
                 # 标量特征
                 extracted_sca = simple_fc(self.processed_sca)
@@ -99,16 +97,16 @@ class DFPPolicy(BasePolicy):
             with tf.variable_scope('concat', reuse=reuse):
                 # 将所有特征拼接
                 extracted_input = tf.concat(
-                    [extracted_img, extracted_sca, extracted_mea, extracted_goal, extracted_gm], axis=1, name='concat')
+                    [extracted_img, extracted_sca, extracted_mea, extracted_goal], axis=1, name='concat')
 
             activ = tf.nn.relu
 
-            # with tf.variable_scope('exp_fc', reuse=reuse):
-            #     # expectation_stream
-            #     expectation_stream_prev = activ(linear(
-            #         extracted_input, 'exp_prev', n_hidden=256, init_scale=np.sqrt(2)))
-            #     expectation_stream = activ(linear(
-            #         expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
+            with tf.variable_scope('exp_fc', reuse=reuse):
+                # expectation_stream
+                expectation_stream_prev = activ(linear(
+                    extracted_input, 'exp_prev', n_hidden=512, init_scale=np.sqrt(2)))
+                expectation_stream = activ(linear(
+                    expectation_stream_prev, 'exp', n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
             if _constants.pgn:
                 print()
@@ -170,22 +168,22 @@ class DFPPolicy(BasePolicy):
                 action_stream = [None] * _constants.n_actions
 
                 with tf.variable_scope('action_fc', reuse=reuse):
-                    for i in range(1, _constants.n_actions + 1):
-                        action_prev[i - 1] = activ(linear(
-                            extracted_input, 'act_prev' + str(i), n_hidden=256, init_scale=np.sqrt(2)))
-                        action_stream[i - 1] = activ(linear(
-                            action_prev[i - 1], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
-            # n_actions = len(action_stream)
+                    for i in range(_constants.n_actions):
+                        action_prev[i] = activ(linear(
+                            extracted_input, 'act_prev' + str(i), n_hidden=512, init_scale=np.sqrt(2)))
+                        action_stream[i] = activ(linear(
+                            action_prev[i], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+            n_actions = len(action_stream)
             # 求 sum
-            # action_sum = action_stream[0]
-            # for i in range(1, n_actions):
-            #     action_sum = tf.add(action_sum, action_stream[i])
-            # # 求 mean
-            # action_mean = tf.divide(action_sum, n_actions)
+            action_sum = action_stream[0]
+            for i in range(1, n_actions):
+                action_sum = tf.add(action_sum, action_stream[i])
+            # 求 mean
+            action_mean = tf.divide(action_sum, n_actions)
             #
-            # for i in range(n_actions):
-            #     # action_stream[i] = tf.subtract(action_stream[i], action_mean)
-            #     action_stream[i] = tf.add(action_stream[i], expectation_stream)
+            for i in range(n_actions):
+                action_stream[i] = tf.subtract(action_stream[i], action_mean)
+                action_stream[i] = tf.add(action_stream[i], expectation_stream)
 
             with tf.variable_scope('future', reuse=reuse):
                 self._future_stream = tf.convert_to_tensor(action_stream)
@@ -199,16 +197,16 @@ class DFPPolicy(BasePolicy):
             self._futures = self.future_stream  # [n_act, n_batch, n_time_span]
 
     def step(self, obs):
-        imgs, scas, meas, goals, gms = zip(*obs)
-        futures = self.sess.run(self.futures,
-                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas, self.goal_ph: goals,
-                                 self.gm_ph: gms})
-        return futures
-
-    def get_futures(self, imgs, scas, meas, goals, gms):
+        imgs, scas, meas, goals = zip(*obs)
         futures = self.sess.run(self.futures,
                                 {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas,
-                                 self.goal_ph: goals, self.gm_ph: gms})
+                                 self.goal_ph: goals})
+        return futures
+
+    def get_futures(self, imgs, scas, meas, goals):
+        futures = self.sess.run(self.futures,
+                                {self.obs_ph: imgs, self.sca_ph: scas, self.mea_ph: meas,
+                                 self.goal_ph: goals})
         return futures
 
     def mse_loss(self, targets):
@@ -216,10 +214,6 @@ class DFPPolicy(BasePolicy):
         mse_error = tf_util.huber_loss(error)
 
         return mse_error, self.futures
-
-    @property
-    def gm_ph(self):
-        return self._gm_ph
 
     @property
     def sca_ph(self):
@@ -232,10 +226,6 @@ class DFPPolicy(BasePolicy):
     @property
     def goal_ph(self):
         return self._goal_ph
-
-    @property
-    def processed_gm(self):
-        return self._processed_gm
 
     @property
     def processed_sca(self):
@@ -300,8 +290,8 @@ def conv(input_tensor, scope, *, n_filters, filter_size, stride,
     n_input = input_tensor.get_shape()[channel_ax].value
     wshape = [filter_height, filter_width, n_input, n_filters]
     with tf.variable_scope(scope):
-        weight = tf.get_variable("w", wshape, initializer=_constants.conv_init)
-        bias = tf.get_variable("b", bias_var_shape, initializer=tf.constant_initializer(0.0))
+        weight = tf.get_variable("w", wshape, initializer=_constants.conv_init, dtype=tf.float32)
+        bias = tf.get_variable("b", bias_var_shape, initializer=tf.constant_initializer(0.0), dtype=tf.float32)
         if not one_dim_bias and data_format == 'NHWC':
             bias = tf.reshape(bias, bshape)
         return bias + tf.nn.conv2d(input_tensor, weight, strides=strides, padding=pad, data_format=data_format)
@@ -320,8 +310,8 @@ def linear(input_tensor, scope, n_hidden, *, init_scale=1.0, init_bias=0.0):
     """
     with tf.variable_scope(scope):
         n_input = input_tensor.get_shape()[1].value
-        weight = tf.get_variable("w", [n_input, n_hidden], initializer=_constants.linear_init)
-        bias = tf.get_variable("b", [n_hidden], initializer=tf.constant_initializer(init_bias))
+        weight = tf.get_variable("w", [n_input, n_hidden], initializer=_constants.linear_init, dtype=tf.float32)
+        bias = tf.get_variable("b", [n_hidden], initializer=tf.constant_initializer(init_bias), dtype=tf.float32)
         return tf.matmul(input_tensor, weight) + bias
 
 

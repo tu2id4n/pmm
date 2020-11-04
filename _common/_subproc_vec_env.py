@@ -26,21 +26,19 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 # env.render()
                 all_actions = env.act(whole_obs)  # 得到所有智能体的 actions
                 if random.random() < update_eps:  # 使用探索
-                    if _constants.random_explore or \
-                            all_actions[_constants.train_idx] == 5 or all_actions[_constants.train_idx] == 0:
+                    if _constants.random_explore:
                         # 使用随机探索
-                        # print('Random act', all_actions[_constants.train_idx])
-                        all_actions[_constants.train_idx] = np.array(random.randint(1, 4))
-                    # else: 使用 simple agent 进行探索
+                        all_actions[_constants.train_idx] = np.array(random.randint(0, _constants.n_actions-1))
                     # else:
                         # print('Simple act')
                 else:
                     # 使用网络输出动作
-                    # print("Fault all_actions[_train_idx]...")
-                    # print('Network act')
                     all_actions[_constants.train_idx] = train_act[0]
+                if env.is_dijk:
+                    real_act = all_actions[_constants.train_idx]
+                else:
+                    real_act = env.dijk_act
 
-                real_act = all_actions[_constants.train_idx]
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
 
                 rew = whole_rew[_constants.train_idx]  # 得到训练智能体的当前步的 reward
