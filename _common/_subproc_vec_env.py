@@ -28,18 +28,15 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                 if random.random() < update_eps:  # 使用探索
                     if _constants.random_explore:
                         # 使用随机探索
-                        all_actions[_constants.train_idx] = np.array(random.randint(0, _constants.n_actions-1))
+                        all_actions[_constants.train_idx] = np.array(random.randint(0, _constants.n_actions - 1))
                     # else:
-                        # print('Simple act')
+                    # print('Simple act')
                 else:
                     # 使用网络输出动作
                     all_actions[_constants.train_idx] = train_act[0]
-                if env.is_dijk:
-                    real_act = all_actions[_constants.train_idx]
-                else:
-                    real_act = env.dijk_act
 
                 whole_obs, whole_rew, done, info = env.step(all_actions)  # 得到所有 agent 的四元组
+                real_act = env.dijk_act
 
                 rew = whole_rew[_constants.train_idx]  # 得到训练智能体的当前步的 reward
                 info['terminal_obs'] = featurize.featurize(whole_obs[_constants.train_idx])  # 保存最后一帧
@@ -51,15 +48,15 @@ def _worker(remote, parent_remote, env_fn_wrapper):
                     whole_obs = env.reset(train_idx=_constants.train_idx, goal=_constants.train_goal)  # 重新开一把
 
                 obs = featurize.featurize(whole_obs[_constants.train_idx])
-
+                state = whole_obs[_constants.train_idx]
                 # 所以done对应的是下一个episode的开始
-                remote.send((obs, rew, done, info['terminal_obs'], win, real_act))
+                remote.send((obs, rew, done, info['terminal_obs'], win, real_act, state))
 
             elif cmd == 'reset':
                 whole_obs = env.reset(train_idx=_constants.train_idx, goal=_constants.train_goal)
                 obs = featurize.featurize(whole_obs[_constants.train_idx])
-
-                remote.send(obs)
+                state = whole_obs[_constants.train_idx]
+                remote.send((obs, state))
 
             elif cmd == 'render':
                 remote.send(env.render(*data[0], **data[1]))
@@ -147,16 +144,17 @@ class SubprocVecEnv(VecEnv):
     def step_wait(self):
         results = [remote.recv() for remote in self.remotes]
         self.waiting = False
-        obs, rews, dones, terminal_obs, wins, acts = zip(*results)
-        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(terminal_obs), np.stack(wins), np.stack(acts)
+        obs, rews, dones, terminal_obs, wins, acts, state = zip(*results)
+        return np.stack(obs), np.stack(rews), np.stack(dones), np.stack(terminal_obs), \
+               np.stack(wins), np.stack(acts), np.stack(state)
 
     def reset(self):
         for remote in self.remotes:
             remote.send(('reset', None))
         results = [remote.recv() for remote in self.remotes]
-        # obs = zip(*results)
-        obs = results
-        return np.stack(obs)
+        obs, state = zip(*results)
+        # obs = results
+        return np.stack(obs), np.stack(state)
 
     def close(self):
         if self.closed:

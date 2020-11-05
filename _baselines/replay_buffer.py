@@ -40,11 +40,12 @@ class ReplayBuffer(object):
         """
         return len(self.storage) >= 2 * self.batch_size
 
-    def add(self, obs, actions, rews, dones, terminal_obs, wins):
+    def add(self, obs, actions, rews, dones, terminal_obs, wins, states):
         imgs, scas, meas, goals = obs
         t_imgs, t_scas, t_meas, t_goals = terminal_obs
         data = (imgs, scas, meas, goals, actions, rews, dones,
-                wins, t_imgs, t_scas, t_meas, t_goals)
+                wins, t_imgs, t_scas, t_meas, t_goals, states)
+
         self.storage.append(data)
         while len(self.storage) > self.maxsize:
             self.storage.pop(0)
@@ -80,7 +81,7 @@ class ReplayBuffer(object):
                 idx = random.randint(0, _len)
                 data = storage[idx]
 
-            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal = data
+            img, sca, mea, goal, action, rew, done, win, t_img, t_sca, t_mea, t_goal, state = data
             imgs.append(img)
             scas.append(sca)
             meas.append(mea)
@@ -100,7 +101,7 @@ class ReplayBuffer(object):
         terminal = False
         while j - idx <= self.time_spans[-1]:
             _, _, j_mea, _, _, _, j_done, _, \
-            _, _, _, _ = storage[j]
+            _, _, _, _, _ = storage[j]
             if j_done and not terminal:  # 代表结束
                 terminal = True
                 terminal_mea = j_mea

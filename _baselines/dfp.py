@@ -118,8 +118,8 @@ class DFP(BaseRLModel):
                     self.tf_learning_rate = tf.train.exponential_decay(self.learning_rate, self.tf_step,
                                                                        _constants.lr_decay_step, _constants.decay_rate,
                                                                        staircase=True)
-                    optimizer = tf.train.AdamOptimizer(
-                        beta1=0.95, epsilon=1e-4, learning_rate=self.tf_learning_rate)
+                    optimizer = tf.train.AdamOptimizer(learning_rate=self.tf_learning_rate)
+                        # beta1=0.95, epsilon=1e-4, learning_rate=self.tf_learning_rate)
                     # optimizer = tf.train.GradientDescentOptimizer(learning_rate=self.learning_rate)
                     self._train = optimizer.apply_gradients(grads)
 
@@ -169,7 +169,7 @@ class DFP(BaseRLModel):
                                               initial_p=1,
                                               final_p=self.exploration_final_eps)
 
-            obs = self.env.reset()
+            obs, state = self.env.reset()
 
             self.episode_reward = np.zeros((1,))
             self.wins = np.zeros((1,))
@@ -189,9 +189,10 @@ class DFP(BaseRLModel):
                 train_act = self.make_action(obs[0][3], futures[0])
                 train_act = np.array([train_act])
                 # 这里使用探索
-                new_obs, rew, done, terminal_obs, win, real_act = self.env.step([(train_act, update_eps)])
-                self.replay_buffer.add(obs[0], real_act[0], rew[0], done[0], terminal_obs[0], win[0])
+                new_obs, rew, done, terminal_obs, win, real_act, new_state = self.env.step([(train_act, update_eps)])
+                self.replay_buffer.add(obs[0], real_act[0], rew[0], done[0], terminal_obs[0], win[0], state[0])
                 obs = new_obs
+                state = new_state
                 if writer is not None:
                     lr = self.sess.run(self.tf_learning_rate) * 1e4
                     summary_eps = tf.Summary(value=[tf.Summary.Value(

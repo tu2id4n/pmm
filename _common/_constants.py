@@ -3,14 +3,15 @@ max_setps = 800
 max_dijk = 9
 
 # env_utils
-num_rigid = 16
-num_wood = 40
+num_rigid = 36
+num_wood = 36
+num_item = 20
 
 # _subproc_vec_env
-# 6dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑,  imove_counts↑]
-train_goal = [1, 1, -0.1, 0.7, -2,  -0.1]
-meas_size = 6
-time_span = [1, 2, 4, 8, 16, 32, 64]
+# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑,  imove_counts↑, reach↑]
+train_goal = [1, 1, -0.1, 0.2, -3, -0.1, 0.2]
+meas_size = 7
+time_span = [1, 2, 4, 8, 16, 32]
 train_idx = 0
 teammates = [train_idx, (train_idx + 2) % 4]
 teammates.sort()
@@ -42,12 +43,12 @@ conv_init = tf.glorot_normal_initializer()
 linear_init = tf.glorot_normal_initializer()
 
 # dfp
-buffer_size = 20000
-learning_starts = 1000
+buffer_size = 50000
+learning_starts = 10000
 exploration_final_eps = 0.2
 exploration_fraction = 0.05
 n_actions = 122
 gamma = 0.99
-batch_size = 32
+batch_size = 64
 lr_decay_step = 5e5
 decay_rate = 0.3

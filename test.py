@@ -9,7 +9,7 @@ import numpy as np
 from _common import _constants
 
 _test = True  # False to example
-_model_path = "model/simple0.99_200k.zip"
+_model_path = "model/test_100k.zip"
 _env_name = 'maze-v2'  # 'PommeRadioCompetition-v21'
 _episode = 1000
 _flag = False
@@ -47,7 +47,8 @@ class Test:
                 all_actions[self.train_idx] = train_act
 
                 obs, rewards, done, info = self.env.step(all_actions)
-                # print("train_act:", train_act)
+
+                # print(obs[self.train_idx]['position'], '->', featurize.extra_position(train_act, obs[self.train_idx]))
                 self.env.render()
 
                 if first_render:  # 第一次 render env 时将当前的测试注册.

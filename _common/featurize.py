@@ -5,6 +5,7 @@ from pommerman import constants, utility
 from gym import spaces
 import random
 from . import _constants
+from . import prune
 
 passage = constants.Item.Passage.value
 rigid = constants.Item.Rigid.value
@@ -70,9 +71,9 @@ def featurize(obs):
     meas['is_dead'] = obs['is_dead']
     meas['position'] = obs['position']
     # meas['goal_positions'] = obs['goal_positions']
-    # meas['reach_goals'] = obs['reach_goals']
     meas['step_counts'] = obs['step_count']
     meas['imove_counts'] = obs['imove_counts']
+    meas['reach'] = obs['reach']
     meas_fea = measurements_extra(meas)
 
     # 提取 goal
@@ -159,7 +160,7 @@ def scalars_extra(scas):
 
 
 # 衡量指标提取
-# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, reach_goals↑, imove_counts↑]
+# 7dim: [woods↑, items↑, ammo_used↑, frags↑, is_dead↑, imove_counts↑, reach↑]
 def measurements_extra(meas):
     maps = []
     woods = meas['woods']  # / 15 if meas['woods'] / 15 <= 1 else 1
@@ -171,9 +172,8 @@ def measurements_extra(meas):
     maps.append(ammo_used)
     maps.append(meas['frags'])
     maps.append(meas['is_dead'])
-
-    # maps.append(meas['reach_goals'])
     maps.append(meas['imove_counts'])
+    maps.append(meas['reach'])
     return np.array(maps, dtype=np.float32)
 
 
@@ -338,7 +338,26 @@ def isLegal_act(state, move, rang=11):
         return False
 
 
-def dijkstra_act(obs_nf, goal_abs, exclude=None, rang=11):
+def dijkstra_act(obs_nf, goal_abs, rang=11):
+    dijk_act = get_dijkstra_act(obs_nf, goal_abs, rang=rang)
+    modify_act = get_modify_act(obs_nf, dijk_act, prev=[None, None], nokick=True)
+    return modify_act
+
+
+def get_modify_act(obs, act, prev=[None, None], nokick=True):
+    valid_actions = prune.get_filtered_actions(copy.deepcopy(obs), prev_two_obs=prev, nokick=nokick)
+    # if 5 in valid_actions:
+    #     return 5
+    if act not in valid_actions:
+        # print('act:', act, valid_actions)
+        act = random.sample(valid_actions, 1)
+    if type(act) == list:
+        act = act[0]
+    # print("real:", act)
+    return act
+
+
+def get_dijkstra_act(obs_nf, goal_abs, exclude=None, rang=11):
     # 放炸弹
     if goal_abs == rang * rang:
         return 5
@@ -431,3 +450,4 @@ def dijkstra_act(obs_nf, goal_abs, exclude=None, rang=11):
                 return count
             count += 1
     return 0
+

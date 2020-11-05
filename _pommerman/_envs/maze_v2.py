@@ -92,6 +92,7 @@ class Pomme(v0.Pomme):
         observation['goal'] = self.goal
         observation['imove_counts'] = 0
         observation['is_dead'] = False
+        observation['reach'] = 0
 
         self.observation_pre = copy.deepcopy(observation)
         observations[self.train_idx] = copy.deepcopy(observation)
@@ -134,7 +135,7 @@ class Pomme(v0.Pomme):
         ammo_used_pre = self.observation_pre['ammo_used']
         position_pre = self.observation_pre['position']
         imove_counts_pre = self.observation_pre['imove_counts']
-        # reach_goals_pre = self.observation_pre['reach_goals']
+        reach_pre = self.observation_pre['reach']
 
         position = observation['position']
         strength = observation['blast_strength'] - 1
@@ -154,7 +155,7 @@ class Pomme(v0.Pomme):
 
         # 加入 my_bomb
         # 首先将之前的 bomb_life -1
-        my_bomb = []
+        my_bomb = []  # [x, y, -2 ~ 9, strength]
         for bf_idx in range(len(my_bomb_pre)):
             my_bomb_pre[bf_idx][2] -= 1
             if my_bomb_pre[bf_idx][2] >= -2:
@@ -172,10 +173,11 @@ class Pomme(v0.Pomme):
 
         observation['items'] = items_pre
 
-        # 加入 woods
+        # 加入 woods, frags
         used_woods = []
+        # [x, y, -2 ~ 9, strength]
         for mb in observation['my_bomb']:
-            if mb[2] <= 0:  # 说明本帧刚刚爆炸, 只有刚刚爆炸才能炸到 woods
+            if mb[2] == 9:  # 说明本帧刚刚放置, 炸到 woods
                 # up, down, left, right
                 for act_toward in [(-1, 0), (1, 0), (0, -1), (0, 1)]:
                     mb_pos = [mb[0], mb[1]]
@@ -191,50 +193,25 @@ class Pomme(v0.Pomme):
                         if board_pre[mb_pos[0]][mb_pos[1]] == wood and mb_pos not in used_woods:
                             woods_pre += 1
                             used_woods.append(mb_pos)
+                        if board_pre[mb_pos[0]][mb_pos[1]] in enemies:
+                            frags_pre += 1
 
         observation['woods'] = woods_pre
-
-        # 加入 frags
-        frags = 0
-        for e in enemies:
-            if e not in alives:
-                frags += 1
-        observation['frags'] = frags
+        observation['frags'] = frags_pre
 
         # 总共获得了多少个 items
         self.get_items = observation['items']
 
-        # # 是否达成目标
-        # self.achive = position in self.observation_pre['goal_positions']
-        #
-        # # 如果达成目标则获得奖励
-        # if self.achive:
-        #     reach_goals_pre += 1
-
-        # observation['reach_goals'] = reach_goals_pre
-
-        # # 添加goal_positions
-        # goal_board = observation['board']
-        # goal_positons = []
-        # for x in range(len(goal_board)):
-        #     for y in range(len(goal_board)):
-        #         if goal_board[(x, y)] in [constants.Item.ExtraBomb.value, constants.Item.IncrRange.value,
-        #                                   constants.Item.Kick.value]:
-        #             goal_positons.append((x, y))
-        # observation['goal_positions'] = goal_positons
-
-        # 是否移动
-        # ntc.
-
         dijk_pos = featurize.extra_position(self.dijk_act, observation)
-        self.is_dijk = dijk_pos == observation['position']
-        # print(self.is_dijk)
-        if not self.is_dijk and self.dijk_step > max_dijk:
-            # print(board_pre)
-            # print(self._intended_actions[0])
-            # print('imove')
+        self.is_dijk = dijk_pos == position
+
+        if self._intended_actions[0] == 0:  # 没有移动 即为 imove
             imove_counts_pre += 1
         observation['imove_counts'] = imove_counts_pre
+        if self.is_dijk and self._intended_actions[0] != 5:
+            reach_pre += 1
+        observation['reach'] = reach_pre
+
 
         self.observation_pre = copy.deepcopy(observation)
         observations[self.train_idx] = copy.deepcopy(observation)
@@ -246,15 +223,12 @@ class Pomme(v0.Pomme):
         self._step_count += 1
 
         if self.is_dijk or self.dijk_step > max_dijk:  # 重启 dijksta
-            # print()
-            # print('reset dijk')
             self.dijk_step = 0
             self.dijk_act = actions[0]
             self.is_dijk = False
 
         self.dijk_step += 1
         actions[0] = featurize.dijkstra_act(self.observation_pre, self.dijk_act)
-        # print(self.dijk_act, self.dijk_step)
         self._intended_actions = actions
 
         max_blast_strength = self._agent_view_size or 10
@@ -391,7 +365,7 @@ class Pomme(v0.Pomme):
                                          _constants.num_wood, len(self._agents))
 
     def make_items(self):
-        self._items = utility.make_items(self._board, _constants.num_wood)
+        self._items = utility.make_items(self._board, _constants.num_item)
 
     @staticmethod
     def featurize(obs):
