@@ -1,17 +1,15 @@
 import random
 import numpy as np
-from _common import _constants
+from _common import _constants, featurize
 import copy
 
+# (imgs, scas, meas, goals, actions, rews, dones,
+# wins, t_imgs, t_scas, t_meas, t_goals, states)
 _img = 0
 _sca = 1
 _mea = 2
 _goal = 3
-_done = 7
-_tmea = 11
-
-_idx_map = 2
-_goal_map = 3
+_done = 6
 
 
 class ReplayBuffer(object):
@@ -50,14 +48,44 @@ class ReplayBuffer(object):
         while len(self.storage) > self.maxsize:
             self.storage.pop(0)
 
-        # self.her += 1
-        # if self.hindsight and not dones and self.her > self.her_size:
-        #     self.her = 0
-        #     st = len(self.storage) - 1 - self.her_size
-        #     f_data = []
-        #
-        #     while len(self.her_storage) > self.maxsize:
-        #         self.her_storage.pop(0)  # 弹出buffer第一位
+        self.her += 1
+        if self.hindsight and not dones and self.her > self.her_size:
+            self.her = 0
+            index_st = len(self.storage) - 1 - self.her_size
+            # print("st", index_st)
+            index_ed = index_st
+            while self.storage[index_st][_done] or index_ed - index_st < 2:
+                index_st = index_ed + 1
+                index_ed = index_st
+                for i in range(index_st, len(self.storage)):
+                    if self.storage[i][_done]:
+                        break
+                    index_ed += 1
+            index_ed -= 1
+            # print("ed", index_ed)
+            # print("all", len(self.storage))
+            if index_ed - index_st < 2:
+                index_st -= 1
+
+            index_rand = index_st + random.randint(2, index_ed - index_st)
+            # print("rand", index_rand)
+            rand = self.storage[index_rand]
+            new_dijk_act = featurize.extra_abs(rand[-1]['position'])
+
+            for i in range(index_st, index_rand - 1):
+                new_data = list(copy.deepcopy(self.storage[i]))
+                new_data[4] = new_dijk_act
+                self.her_storage.append(tuple(new_data))
+
+            rand1 = self.storage[index_rand - 1]
+            new_data = list(copy.deepcopy(rand1))
+            new_data[4] = new_dijk_act
+            new_data[_mea][-1] += 1
+            new_data[_done] = True
+            self.her_storage.append(tuple(new_data))
+
+            while len(self.her_storage) > self.maxsize:
+                self.her_storage.pop(0)  # 弹出buffer第一位
 
     def sample(self):
         return self.seq_sample()

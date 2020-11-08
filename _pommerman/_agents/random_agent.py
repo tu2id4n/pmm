@@ -7,5 +7,5 @@ class RandAgent(BaseAgent):
 
     def act(self, obs, action_space):
         # if random.random() < 0.2:
-        return 121
-        # return random.randint(0, 121)
+        # return 121
+        return random.randint(0, 120)

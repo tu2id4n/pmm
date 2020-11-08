@@ -1,6 +1,8 @@
 model/
 log/
+fig/
+csv/
 .DS_Store/
 .vscode/
 .idea/
-
+draw.py

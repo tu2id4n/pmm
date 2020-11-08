@@ -27,7 +27,7 @@ agent3 = constants.Item.Agent3.value
 _num_rigid = _constants.num_rigid
 
 
-def make_board_v1(size, num_rigid=0, num_wood=0, num_agents=4):
+def make_board(size, num_rigid=0, num_wood=0, num_agents=4):
     """Make the random but symmetric board.
 
     The numbers refer to the Item enum in constants. This is:
@@ -178,12 +178,11 @@ def make_board_v1(size, num_rigid=0, num_wood=0, num_agents=4):
 def make_items(board, num_items):
     '''Lays all of the items on the board'''
     item_positions = {}
-    num_items = 0
     while num_items > 0:
         row = random.randint(0, len(board) - 1)
         col = random.randint(0, len(board[0]) - 1)
-        # if board[row, col] != constants.Item.Wood.value:
-        # continue
+        if board[row, col] != constants.Item.Wood.value:
+            continue
         if (row, col) in item_positions:
             continue
 
@@ -209,12 +208,36 @@ def generate_item(board, position, size=11):
             x = random.randint(0, 10)
             y = random.randint(0, 10)
         board[x, y] = value
-        return board
+        return board, (x, y)
 
     agents = [(1, 1), (size - 2, 1), (1, size - 2), (size - 2, size - 2)]
     inaccess = utility.inaccessible_passages(board, agents)
     inaccess.append(position)
     item_value = random.choice([constants.Item.ExtraBomb, constants.Item.IncrRange, constants.Item.Kick]).value
+    board = lay_item(item_value, inaccess, board)
+
+    return board
+
+def generate_wood(board, position, size=11):
+    def lay_item(value, inaccess, board):
+        '''Lays all of the walls on a board'''
+        pos_x, pos_y = position
+        x_low = pos_x - 3 if pos_x - 3 >= 0 else 0
+        x_high = pos_x + 3 if pos_x + 3 <= 10 else 10
+        y_low = pos_y - 3 if pos_y - 3 >= 0 else 0
+        y_high = pos_y + 3 if pos_y + 3 <= 10 else 10
+        x = random.randint(x_low, x_high)
+        y = random.randint(y_low, y_high)
+        while (x, y) in inaccess or board[x, y] != passage:
+            x = random.randint(0, 10)
+            y = random.randint(0, 10)
+        board[x, y] = value
+        return board, (x, y)
+
+    agents = [(1, 1), (size - 2, 1), (1, size - 2), (size - 2, size - 2)]
+    inaccess = utility.inaccessible_passages(board, agents)
+    inaccess.append(position)
+    item_value = wood
     board = lay_item(item_value, inaccess, board)
 
     return board

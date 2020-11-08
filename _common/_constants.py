@@ -19,27 +19,21 @@ enemies = [(train_idx + 1) % 4, (train_idx + 3) % 4]
 enemies.sort()
 random_explore = True
 update_eps = 0.2
+pgn = False
+n_actions = 122
 
 # replay_buffer
 hindsight = False
-her_size = 15
+her_size = 30
 her_K = 4
-woods = 0
-items = 1
-ammo_used = 2
-frags = 3
-is_dead = 4
-reach_goals = 0
-imove_counts = 1
 
 # dfp_policy
 import tensorflow as tf
 from stable_baselines.a2c.utils import ortho_init
 
-pgn = False
 init_scale = 1
-# conv_init = ortho_init(init_scale)
-conv_init = tf.glorot_normal_initializer()
+conv_init = ortho_init(init_scale)
+# conv_init = tf.glorot_normal_initializer()
 linear_init = tf.glorot_normal_initializer()
 
 # dfp
@@ -47,7 +41,6 @@ buffer_size = 50000
 learning_starts = 10000
 exploration_final_eps = 0.2
 exploration_fraction = 0.05
-n_actions = 122
 gamma = 0.99
 batch_size = 64
 lr_decay_step = 5e5

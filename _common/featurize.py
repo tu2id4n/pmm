@@ -43,6 +43,11 @@ def get_action_space():
     return spaces.Discrete(_constants.n_actions)
 
 
+def dijkstra_act(obs_nf, goal_abs, rang=11):
+    dijk_act = get_dijkstra_act(obs_nf, goal_abs, rang=rang)
+    modify_act = get_modify_act(obs_nf, dijk_act, prev=[None, None], nokick=True)
+    return modify_act
+
 # 分离img \ meas \ scalars 并处理为网络的输入
 def featurize(obs):
     # 直接使用原来obs作为 img
@@ -120,16 +125,6 @@ def img_extra(img):
     # maps.append(move_direction / 4)
 
     return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 9
-
-
-# goalmap提取
-# def goalmap_extra(img):
-#     board = img['board']
-#     maps = []
-#     for i in [passage, rigid, img['idx'], extra_bomb]:
-#         maps.append(board == i)
-#
-#     return np.array(np.stack(maps, axis=2), dtype=np.float32)  # 11 * 11 * 4
 
 
 # 标量提取
@@ -312,6 +307,12 @@ def extra_position(pos_abs, state):
                 return (x, y)
 
 
+def extra_abs(position):
+    x, y = position
+    act_abs = x * 11 + y
+    return act_abs
+
+
 def position_is_passable(board, position, enemies):
     '''Determins if a possible can be passed'''
     return all([
@@ -336,12 +337,6 @@ def isLegal_act(state, move, rang=11):
             return state['board'][(my_x + row, my_y + col)] == passage
     else:
         return False
-
-
-def dijkstra_act(obs_nf, goal_abs, rang=11):
-    dijk_act = get_dijkstra_act(obs_nf, goal_abs, rang=rang)
-    modify_act = get_modify_act(obs_nf, dijk_act, prev=[None, None], nokick=True)
-    return modify_act
 
 
 def get_modify_act(obs, act, prev=[None, None], nokick=True):
@@ -450,4 +445,3 @@ def get_dijkstra_act(obs_nf, goal_abs, exclude=None, rang=11):
                 return count
             count += 1
     return 0
-

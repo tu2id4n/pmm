@@ -6,12 +6,12 @@ from _common import featurize, _constants
 
 agent_list = [
     _agents.RandAgent(),
-    _agents.StopAgent(),
-    _agents.StopAgent(),
-    _agents.StopAgent(),
+    _agents.SuicideAgent(),
+    _agents.SuicideAgent(),
+    _agents.SuicideAgent(),
 ]
 
-env = pommerman.make('maze-v2', agent_list)
+env = pommerman.make('maze-v1', agent_list)
 
 red_win = 0
 for episode in tqdm(range(100)):
@@ -22,16 +22,21 @@ for episode in tqdm(range(100)):
     frags = 0
     a = 0
     while not done:
+        env.render()
         all_actions = env.act(obs)
         # fea = featurize.featurize(obs[0])
         # print("random act:", all_actions[0])
         # print('dijk_step:', env.dijk_step)
-        # if env.is_dijk or env.dijk_step > _constants.max_dijk:
-        #     a = input("input:")
-        # all_actions[0] = int(a)
+
+        if env.is_dijk or env.dijk_step > _constants.max_dijk:
+            a = input("input:")
+        all_actions[0] = int(a)
         # print(all_actions[0])
+
         obs, rewards, done, info = env.step(all_actions)
 
+        print(obs[0]['items'])
+        print(rewards)
         # print("imove_counts", obs[0]['imove_counts'])
 
         # print(obs[0]['my_bomb'])
@@ -44,7 +49,7 @@ for episode in tqdm(range(100)):
         #     print("frags", obs[0]['frags'])
 
         # print('reach:', obs[0]['reach'])
-        env.render()
+        # env.render()
     print(rewards, info)
     if rewards[0] == 1:
         red_win += 1

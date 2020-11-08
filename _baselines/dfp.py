@@ -180,8 +180,8 @@ class DFP(BaseRLModel):
                     if callback(locals(), globals()) is False:
                         break
 
-                # update_eps = self.exploration.value(self.num_timesteps)
-                update_eps = _constants.update_eps
+                update_eps = self.exploration.value(self.num_timesteps)
+                # update_eps = _constants.update_eps
 
                 with self.sess.as_default():
                     futures = self.act_model.step(obs)  # (n_act, n_batch, future_size)

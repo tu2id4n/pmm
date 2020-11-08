@@ -9,28 +9,22 @@ from _common import _constants
 
 def img_cnn(scaled_images, name='img', **kwargs):
     activ = tf.nn.relu
+    print("scaled_images", scaled_images)
     layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=16, filter_size=8,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    print("layer1", layer_1)
     layer_2 = activ(conv(layer_1, name + 'c2', n_filters=32, filter_size=4,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    print("layer2", layer_2)
     layer_3 = activ(conv(layer_2, name + 'c3', n_filters=64, filter_size=3,
                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
+    print("layer3", layer_3)
     layer_3 = conv_to_fc(layer_3)
-    return activ(linear(layer_3, name + 'fc', n_hidden=256, init_scale=np.sqrt(2)))
+    print("fc", layer_3)
+    return activ(linear(layer_3, name + 'fc', n_hidden=512, init_scale=np.sqrt(2)))
 
 
-# def gm_cnn(scaled_images, name='gm', **kwargs):
-#     activ = tf.nn.relu
-#     layer_1 = activ(conv(scaled_images, name + 'c1', n_filters=64, filter_size=8,
-#                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-#     layer_2 = activ(conv(layer_1, name + 'c2', n_filters=64, filter_size=8,
-#                          stride=1, init_scale=np.sqrt(2), pad='SAME', **kwargs))
-#
-#     layer_3 = conv_to_fc(layer_2)
-#     return activ(linear(layer_3, name + 'fc', n_hidden=256, init_scale=np.sqrt(2)))
-
-
-def simple_fc(scalars, name='sca', n_dim=128):
+def simple_fc(scalars, name='sca', n_dim=256):
     activ = tf.nn.relu
     layer_1 = activ(
         linear(scalars, name + '1', n_hidden=n_dim, init_scale=np.sqrt(2)))
@@ -83,8 +77,8 @@ class DFPPolicy(BasePolicy):
 
             with tf.variable_scope('sca_fc', reuse=reuse):
                 # 标量特征
-                extracted_sca = simple_fc(self.processed_sca)
-                extracted_sca = tf.layers.flatten(extracted_sca)
+                # extracted_sca = simple_fc(self.processed_sca)
+                extracted_sca = tf.layers.flatten(self.processed_sca)
             with tf.variable_scope('mea_fc', reuse=reuse):
                 # 衡量值特征
                 extracted_mea = simple_fc(self.processed_mea, name='mea')
@@ -114,51 +108,58 @@ class DFPPolicy(BasePolicy):
                 print()
                 if pgn_params:
                     print("PGN Loading...")
-                    action_stream = [None] * _constants.n_actions
-                    with tf.variable_scope('action_fc', reuse=reuse):
-                        action_stream[0] = activ(linear(
-                            extracted_input, 'act' + str(0), n_hidden=self.future_size, init_scale=np.sqrt(2)))
 
-                    with tf.variable_scope('action_fc', reuse=reuse):
-                        action_stream[_constants.n_actions - 1] = activ(linear(
-                            extracted_input, 'act' + str(_constants.n_actions - 1),
-                            n_hidden=self.future_size, init_scale=np.sqrt(2)))
                     len_params = len(pgn_params)
-                    prev_stream = [[None] * self.n_actions] * len_params
-                    u_stream = [[None] * self.n_actions] * len_params
-                    for c in range(len_params):  # col, row
+                    prev = [[None] * (_constants.n_actions - 1)] * len_params
+                    prev_stream = [[None] * (_constants.n_actions - 1)] * len_params
+                    for c in range(len_params):  # c代表第几列网络
                         with tf.variable_scope('prev_fc' + str(c), reuse=reuse):
-                            for r in range(1, _constants.n_actions - 1):
-                                scope = 'action_fc/act' + str(r)
-                                prev_stream[c][r] = activ(pgn_linear(extracted_input, scope,
-                                                                     ww=pgn_params[c][scope + '/w'],
-                                                                     bb=pgn_params[c][scope + '/b']))
+                            for r in range(_constants.n_actions - 1):  # r代表动作 没有最后一个动作
+                                scope1 = 'action_fc/act_prev' + str(r)
+                                scope2 = 'action_fc/act' + str(r)
+                                prev[c][r] = activ(pgn_linear(extracted_input, scope1,
+                                                              ww=pgn_params[c][scope1 + '/w'],
+                                                              bb=pgn_params[c][scope1 + '/b']))
+                                prev_stream[c][r] = activ(pgn_linear(prev[c][r], scope2,
+                                                                     ww=pgn_params[c][scope2 + '/w'],
+                                                                     bb=pgn_params[c][scope2 + '/b']))
 
-                        with tf.variable_scope('u_fc' + str(c), reuse=reuse):
-                            for r in range(1, _constants.n_actions - 1):
-                                scope = 'act' + str(r)
-                                u_stream[c][r] = activ(linear(
-                                    prev_stream[c][r], scope, n_hidden=self.future_size, init_scale=np.sqrt(2)))
-
-                    usum_stream = [None] * self.n_actions
-                    for r in range(1, _constants.n_actions - 1):
-                        usum_stream[r] = u_stream[0][r]
-                        for c in range(1, len(u_stream)):
-                            usum_stream[r] = tf.add(usum_stream[r], u_stream[c][r])
+                    action_prev = [None] * _constants.n_actions
+                    action_stream = [None] * _constants.n_actions
 
                     with tf.variable_scope('action_fc', reuse=reuse):
-                        for i in range(1, _constants.n_actions - 1):
+                        for i in range(_constants.n_actions - 1):  # 第 i 个动作
+                            action_prev[i] = linear(
+                                extracted_input, 'act_prev' + str(i), n_hidden=512, init_scale=np.sqrt(2))
+                            for c in range(len_params):
+                                action_prev[i] = tf.add(action_prev[i], prev[c][i])
+                            action_prev[i] = activ(tf.divide(action_prev[i], len_params + 1))
+
                             action_stream[i] = linear(
-                                extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
-                            action_stream[i] = activ(tf.add(action_stream[i], usum_stream[i]))
+                                action_prev[i], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2))
+                            for c in range(len_params):
+                                action_stream[i] = tf.add(action_stream[i], prev_stream[c][i])
+
+                            action_stream[i] = activ(tf.divide(action_stream[i], len_params + 1))
+
+                        # 最后一个放置炸弹单独处理
+                        action_prev[121] = activ(linear(
+                            extracted_input, 'act_prev' + str(121), n_hidden=512, init_scale=np.sqrt(2)))
+                        action_stream[121] = activ(linear(
+                            action_prev[121], 'act' + str(121), n_hidden=self.future_size, init_scale=np.sqrt(2)))
                 else:
                     print("DFP Loading...")
 
+                    action_prev = [None] * _constants.n_actions
                     action_stream = [None] * _constants.n_actions
+
                     with tf.variable_scope('action_fc', reuse=reuse):
                         for i in range(_constants.n_actions):
-                            action_stream[i - 1] = activ(linear(
-                                extracted_input, 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+                            action_prev[i] = activ(linear(
+                                extracted_input, 'act_prev' + str(i), n_hidden=512, init_scale=np.sqrt(2)))
+                            action_stream[i] = activ(linear(
+                                action_prev[i], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+
             else:
                 print()
                 print("Pure DFP...")
@@ -173,7 +174,9 @@ class DFPPolicy(BasePolicy):
                             extracted_input, 'act_prev' + str(i), n_hidden=512, init_scale=np.sqrt(2)))
                         action_stream[i] = activ(linear(
                             action_prev[i], 'act' + str(i), n_hidden=self.future_size, init_scale=np.sqrt(2)))
+
             n_actions = len(action_stream)
+
             # 求 sum
             action_sum = action_stream[0]
             for i in range(1, n_actions):

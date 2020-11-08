@@ -10,8 +10,8 @@ def make_envs(env_id):
         agent_list = [
             agents.SimpleAgent(),
             agents.SimpleAgent(),
-            _agents.SuicideAgent(),
-            _agents.SuicideAgent(),
+            agents.SimpleAgent(),
+            agents.SimpleAgent(),
 
             # _agents.StopAgent(),
             # _agents.SuicideAgent(),
