@@ -1,5 +1,5 @@
 tensorboard==1.14.0
-tensorflow==1.14.0
+tensorflow==2.9.3
 tensorflow-estimator==1.14.0
 docker==3.7.3
 gym==0.10.11
